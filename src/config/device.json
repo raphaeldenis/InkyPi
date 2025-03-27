@@ -20,15 +20,39 @@
                         "plugin_settings": {
                             "title": "",
                             "calendarUrl": "webcal://p106-caldav.icloud.com/published/2/NDUxNzg1NTQxNDUxNzg1NUI0ZiQYjVBr56bdRe2riRIAI3jHpuCI0MTrlG7Ars8CaraFQNkAEw9FRtb23FXDwiwO_6kRuzNsAR69vK1ir5s",
-                            "viewMode": "day",
+                            "viewMode": "week",
                             "colorScheme": "blue",
                             "daysToShow": "7",
-                            "maxEvents": "15"
+                            "maxEvents": "15",
+                            "selectedFrame": "",
+                            "margin": "",
+                            "backgroundOption": "color",
+                            "backgroundColor": "#ffffff",
+                            "textColor": "#000000"
                         },
                         "refresh": {
                             "interval": 7200
                         },
                         "latest_refresh_time": "2025-03-27T13:59:05.562401+00:00"
+                    },
+                    {
+                        "plugin_id": "image_upload",
+                        "name": "photoIcloud",
+                        "plugin_settings": {
+                            "portraitMode": "true",
+                            "zoomLevel": "100",
+                            "rotation": "0",
+                            "quality": "high",
+                            "centerX": "50",
+                            "centerY": "50",
+                            "imageFiles[]": [
+                                "/Users/chicko/Documents/Coding/InkyPi/src/static/images/saved/IMG_0188.jpg"
+                            ]
+                        },
+                        "refresh": {
+                            "interval": 86400
+                        },
+                        "latest_refresh_time": "2025-03-27T14:51:27.745017+00:00"
                     }
                 ],
                 "current_plugin_index": 0
@@ -37,8 +61,8 @@
         "active_playlist": "Default"
     },
     "refresh_info": {
-        "refresh_time": "2025-03-27T14:21:04.876163+00:00",
-        "image_hash": "9dbce7b8912f253b28c9a33fcbcdd737d9aaff8e508769cd2d61b1b1cb267824",
+        "refresh_time": "2025-03-27T15:52:11.605843+00:00",
+        "image_hash": "7efcf1faa364e94aa9e0e4c9e090bcaa2483f4c9c5d45ba677a33616f18c6fe5",
         "refresh_type": "Manual Update",
         "plugin_id": "icalendar"
     }

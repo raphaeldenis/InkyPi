@@ -77,8 +77,20 @@ class Weather(BasePlugin):
         dt = datetime.fromtimestamp(current.get('dt'), tz=timezone.utc).astimezone(tz)
         current_icon = current.get("weather")[0].get("icon").replace("n", "d")
         location_str = f"{location_data.get('name')}, {location_data.get('state', location_data.get('country'))}"
+        
+        # French date format: "Jour de la semaine, Jour Mois"
+        # Convert to French weekday and month names
+        weekdays_fr = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+        months_fr = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"]
+        
+        # Python's weekday() returns 0 for Monday, we need 0-indexed lookup
+        weekday_fr = weekdays_fr[dt.weekday()]
+        month_fr = months_fr[dt.month - 1]  # Month is 1-indexed, so subtract 1
+        
+        current_date_fr = f"{weekday_fr}, {dt.day} {month_fr}"
+        
         data = {
-            "current_date": dt.strftime("%A, %B %d"),
+            "current_date": current_date_fr,
             "location": location_str,
             "current_day_icon": self.get_plugin_dir(f'icons/{current_icon}.png'),
             "current_temperature": str(round(current.get("temp"))),
@@ -94,11 +106,18 @@ class Weather(BasePlugin):
 
     def parse_forecast(self, daily_forecast, tz):
         forecast = []
+        # French day name abbreviations
+        weekdays_abbr_fr = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
+        
         for day in daily_forecast[1:]:
             icon = day.get("weather")[0].get("icon")
             dt = datetime.fromtimestamp(day.get('dt'), tz=timezone.utc).astimezone(tz)
+            
+            # Use French day abbreviation
+            day_fr = weekdays_abbr_fr[dt.weekday()]
+            
             day_forecast = {
-                "day": dt.strftime("%a"),
+                "day": day_fr,
                 "high": int(day.get("temp", {}).get("max")),
                 "low": int(day.get("temp", {}).get("min")),
                 "icon": self.get_plugin_dir(f"icons/{icon.replace('n', 'd')}.png")
@@ -111,7 +130,7 @@ class Weather(BasePlugin):
         for hour in hourly_forecast[:24]:
             dt = datetime.fromtimestamp(hour.get('dt'), tz=timezone.utc).astimezone(tz)
             hour_forecast = {
-                "time": dt.strftime("%-I %p"),
+                "time": dt.strftime("%Hh"),  # 24-hour format with 'h' suffix (common in French)
                 "temperature": int(hour.get("temp")),
                 "precipitiation": hour.get("pop")
             }
@@ -124,7 +143,7 @@ class Weather(BasePlugin):
         sunrise_epoch = weather.get('current', {}).get("sunrise")
         sunrise_dt = datetime.fromtimestamp(sunrise_epoch, tz=timezone.utc).astimezone(tz)
         data_points.append({
-            "label": "Sunrise",
+            "label": "Lever de soleil",
             "measurement": sunrise_dt.strftime('%I:%M').lstrip("0"),
             "unit": sunrise_dt.strftime('%p'),
             "icon": self.get_plugin_dir('icons/sunrise.png')
@@ -133,35 +152,35 @@ class Weather(BasePlugin):
         sunset_epoch = weather.get('current', {}).get("sunset")
         sunset_dt = datetime.fromtimestamp(sunset_epoch, tz=timezone.utc).astimezone(tz)
         data_points.append({
-            "label": "Sunset",
+            "label": "Coucher",
             "measurement": sunset_dt.strftime('%I:%M').lstrip("0"),
             "unit": sunset_dt.strftime('%p'),
             "icon": self.get_plugin_dir('icons/sunset.png')
         })
 
         data_points.append({
-            "label": "Wind",
+            "label": "Vent",
             "measurement": weather.get('current', {}).get("wind_speed"),
             "unit": UNITS[units]["speed"],
             "icon": self.get_plugin_dir('icons/wind.png')
         })
 
         data_points.append({
-            "label": "Humidity",
+            "label": "Humidité",
             "measurement": weather.get('current', {}).get("humidity"),
             "unit": '%',
             "icon": self.get_plugin_dir('icons/humidity.png')
         })
 
         data_points.append({
-            "label": "Pressure",
+            "label": "Pression",
             "measurement": weather.get('current', {}).get("pressure"),
             "unit": 'hPa',
             "icon": self.get_plugin_dir('icons/pressure.png')
         })
 
         data_points.append({
-            "label": "UV Index",
+            "label": "Indice UV",
             "measurement": weather.get('current', {}).get("uvi"),
             "unit": '',
             "icon": self.get_plugin_dir('icons/uvi.png')
@@ -170,7 +189,7 @@ class Weather(BasePlugin):
         visibility = weather.get('current', {}).get("visibility")/1000
         visibility_str = f">{visibility}" if visibility >= 10 else visibility
         data_points.append({
-            "label": "Visibility",
+            "label": "Visibilité",
             "measurement": visibility_str,
             "unit": 'km',
             "icon": self.get_plugin_dir('icons/visibility.png')
@@ -178,9 +197,9 @@ class Weather(BasePlugin):
 
         aqi = air_quality.get('list', [])[0].get("main", {}).get("aqi")
         data_points.append({
-            "label": "Air Quality",
+            "label": "Qualité Air",
             "measurement": aqi,
-            "unit": ["Good", "Fair", "Moderate", "Poor", "Very Poor"][int(aqi)-1],
+            "unit": ["Bon", "Correct", "Moyen", "Mauvais", "Très Mauvais"][int(aqi)-1],
             "icon": self.get_plugin_dir('icons/aqi.png')
         })
 

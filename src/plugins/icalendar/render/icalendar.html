@@ -1,0 +1,136 @@
+{% extends "plugin.html" %}
+
+{% block content %}
+<div class="calendar-dashboard">
+    <!-- Header -->
+    <div class="header">
+        <div class="location">{{ title }}</div>
+        <div class="current-date">{{ current_date }}</div>
+    </div>
+
+    {% if view_mode == "day" %}
+    <!-- Day View -->
+    <div class="day-view">
+        <!-- Current Day Header -->
+        <div class="day-header">
+            <div class="day-date">{{ day_header }}</div>
+        </div>
+
+        <!-- Timeline -->
+        <div class="timeline-container">
+            {% for hour in hours %}
+            <div class="hour-row">
+                <div class="hour-label">{{ hour.label }}</div>
+                <div class="hour-line"></div>
+            </div>
+            {% endfor %}
+
+            <!-- Event cards -->
+            {% for event in day_events %}
+            <div class="event-card"
+                style="--top: {{ event.top }}%; --height: {{ event.height }}%; --left: {{ event.left }}%; --width: {{ event.width }}%;">
+                <div class="event-time">{{ event.time }}</div>
+                <div class="event-title">{{ event.summary }}</div>
+                {% if event.location %}
+                <div class="event-location">{{ event.location }}</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+
+            <!-- All-day events -->
+            {% if all_day_events %}
+            <div class="all-day-container">
+                <div class="all-day-label">All Day</div>
+                {% for event in all_day_events %}
+                <div class="all-day-event">
+                    <div class="event-title">{{ event.summary }}</div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% elif view_mode == "week" %}
+    <!-- Week View -->
+    <div class="week-view">
+        <!-- Mini calendar -->
+        <div class="mini-calendar">
+            <div class="month-header">{{ month_name }}</div>
+            <div class="weekdays-row">
+                {% for day in weekdays %}
+                <div class="weekday">{{ day }}</div>
+                {% endfor %}
+            </div>
+            <div class="days-grid">
+                {% for week in calendar_grid %}
+                <div class="week-row">
+                    {% for day in week %}
+                    <div class="day-cell {% if day.today %}today{% endif %} {% if day.different_month %}different-month{% endif %}"
+                        data-date="{{ day.date }}">
+                        {{ day.day }}
+                        {% if day.has_events %}<div class="day-indicator"></div>{% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Coming up section -->
+        <div class="coming-up">
+            <div class="coming-up-header">Coming Up</div>
+            <div class="upcoming-events">
+                {% for event in upcoming_events %}
+                <div class="upcoming-event">
+                    <div class="event-day">{{ event.day }}</div>
+                    <div class="event-content">
+                        <div class="event-time {% if event.all_day %}all-day{% endif %}">
+                            {% if event.all_day %}All Day{% else %}{{ event.time }}{% endif %}
+                        </div>
+                        <div class="event-title">{{ event.summary }}</div>
+                        {% if event.location %}
+                        <div class="event-location">{{ event.location }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    {% else %}
+    <!-- List View -->
+    <div class="list-view">
+        {% for day in list_days %}
+        <div class="day-section">
+            <div class="day-header">
+                <div class="day-name">{{ day.name }}</div>
+                <div class="day-date">{{ day.date }}</div>
+            </div>
+            <div class="day-events">
+                {% for event in day.events %}
+                <div class="list-event">
+                    <div class="event-time-box {% if event.all_day %}all-day{% endif %}">
+                        {% if event.all_day %}
+                        <div class="time-all-day">All Day</div>
+                        {% else %}
+                        <div class="time-start">{{ event.start_time }}</div>
+                        <div class="time-end">{{ event.end_time }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="event-details">
+                        <div class="event-title">{{ event.summary }}</div>
+                        {% if event.location %}
+                        <div class="event-location">{{ event.location }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

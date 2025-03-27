@@ -61,7 +61,24 @@ class BasePlugin:
     def read_file(self, file):
         return base64.b64encode(open(file, "rb").read()).decode('utf-8')
 
-    def render_image(self, dimensions, html_file, css_file=None, template_params={}):
+    def render_image(self, dimensions, html_file, css_file=None, template_params={}, direct_render=False):
+        """
+        Render an image from HTML template or through direct rendering.
+        
+        Args:
+            dimensions: Tuple of (width, height) for the image
+            html_file: HTML template filename to render
+            css_file: Optional CSS filename to include
+            template_params: Dictionary of parameters for the template
+            direct_render: If True, skip HTML rendering and use direct PIL drawing
+            
+        Returns:
+            PIL Image object
+        """
+        # For direct rendering without HTML templating
+        if direct_render:
+            return self.render_direct(dimensions, template_params)
+            
         # instantiate jinja2 env with base plugin and current plugin render directories
         base_render_dir = os.path.join(BASE_PLUGIN_DIR, "render")
         plugin_render_dir = self.get_plugin_dir("render")
@@ -88,3 +105,41 @@ class BasePlugin:
         rendered_html = template.render(template_params)
 
         return take_screenshot_html(rendered_html, dimensions)
+        
+    def render_direct(self, dimensions, params):
+        """
+        Render directly using PIL instead of HTML templates.
+        This method can be overridden by plugins for direct rendering.
+        
+        Args:
+            dimensions: Tuple of (width, height) for the image
+            params: Dictionary of parameters for the rendering
+            
+        Returns:
+            PIL Image object
+        """
+        from PIL import Image, ImageDraw
+        from utils.app_utils import get_font
+        
+        width, height = dimensions
+        image = Image.new("RGB", dimensions, (255, 255, 255))
+        draw = ImageDraw.Draw(image)
+        
+        # Try to use a font
+        try:
+            title_font = get_font("Jost-SemiBold", 32)
+        except:
+            from PIL import ImageFont
+            title_font = ImageFont.load_default()
+        
+        # Draw a basic header
+        draw.rectangle([(0, 0), (width, 60)], fill=(65, 105, 225))
+        
+        # Draw plugin name
+        plugin_id = self.get_plugin_id().capitalize()
+        draw.text((width//2, 30), f"{plugin_id} Plugin", fill=(255, 255, 255), font=title_font, anchor="mm")
+        
+        # Draw a message indicating direct rendering
+        draw.text((width//2, height//2), "Direct rendering mode", fill=(0, 0, 0), font=title_font, anchor="mm")
+        
+        return image

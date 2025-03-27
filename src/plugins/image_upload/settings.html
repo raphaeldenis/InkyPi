@@ -1,6 +1,7 @@
 <div class="form-group">
     <label for="imageUpload" class="form-input file-upload-label">Choose Image</label>
-    <input type="file" clear-on-submit id="imageUpload" name="imageFiles[]" accept="image/*" multiple class="file-upload-input" onchange="addFiles()">
+    <input type="file" clear-on-submit id="imageUpload" name="imageFiles[]" accept="image/*" multiple
+        class="file-upload-input" onchange="addFiles()">
 </div>
 
 <!-- Display uploaded & existing file names -->
@@ -8,14 +9,102 @@
     <div id="fileNames" class="file-name-list"></div>
 </div>
 
+<!-- Display options -->
+<div class="form-group">
+    <label class="form-label">Display Options:</label>
+
+    <div class="help-text" style="margin-bottom: 10px;">
+        These options help you control how your images are displayed on the e-ink screen.
+    </div>
+
+    <!-- Basic options -->
+    <div class="form-group">
+        <input type="checkbox" id="portraitMode" name="portraitMode"
+            onclick="this.value=this.checked ? 'true' : 'false';">
+        <label for="portraitMode">Portrait Mode</label>
+        <span class="help-text">Display image in portrait orientation</span>
+    </div>
+
+    <div class="form-group">
+        <label for="zoomLevel">Zoom Level:</label>
+        <select id="zoomLevel" name="zoomLevel" class="form-input">
+            <option value="100">100% (Full Size)</option>
+            <option value="90">90%</option>
+            <option value="80">80%</option>
+            <option value="70">70%</option>
+            <option value="60">60%</option>
+            <option value="50">50%</option>
+        </select>
+        <span class="help-text">Lower zoom helps avoid cropping by showing more of the image</span>
+    </div>
+
+    <!-- Advanced options toggle -->
+    <div class="form-group">
+        <button type="button" onclick="toggleAdvancedOptions()" id="advancedToggle" class="action-button compact">
+            Show Advanced Options
+        </button>
+    </div>
+
+    <!-- Advanced options section (hidden by default) -->
+    <div id="advancedOptions" style="display: none; border-left: 3px solid #ddd; padding-left: 10px; margin: 10px 0;">
+        <div class="form-group">
+            <label for="rotation">Custom Rotation (degrees):</label>
+            <input type="number" id="rotation" name="rotation" class="form-input" min="-180" max="180" step="90"
+                value="0">
+            <span class="help-text">Rotate image by specified degrees (e.g., 90, 180, -90)</span>
+        </div>
+
+        <div class="form-group">
+            <label for="quality">Image Quality:</label>
+            <select id="quality" name="quality" class="form-input">
+                <option value="high">High (Best quality, slower)</option>
+                <option value="medium">Medium (Good quality, faster)</option>
+                <option value="low">Low (Lower quality, fastest)</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Focus Point:</label>
+            <div style="display: flex; justify-content: space-between; gap: 10px;">
+                <div style="flex: 1;">
+                    <label for="centerX">Horizontal (%):</label>
+                    <input type="range" id="centerX" name="centerX" min="0" max="100" value="50" class="form-input"
+                        oninput="document.getElementById('centerXValue').textContent = this.value + '%'">
+                    <span id="centerXValue">50%</span>
+                </div>
+                <div style="flex: 1;">
+                    <label for="centerY">Vertical (%):</label>
+                    <input type="range" id="centerY" name="centerY" min="0" max="100" value="50" class="form-input"
+                        oninput="document.getElementById('centerYValue').textContent = this.value + '%'">
+                    <span id="centerYValue">50%</span>
+                </div>
+            </div>
+            <span class="help-text">Adjust to focus on different parts of the image when cropped</span>
+        </div>
+    </div>
+</div>
+
 <!-- Hidden input fields to store existing file data -->
 <div id="hiddenFileInputs"></div>
 
 <script>
+    function toggleAdvancedOptions() {
+        const advancedOptions = document.getElementById('advancedOptions');
+        const toggleButton = document.getElementById('advancedToggle');
+
+        if (advancedOptions.style.display === 'none') {
+            advancedOptions.style.display = 'block';
+            toggleButton.textContent = 'Hide Advanced Options';
+        } else {
+            advancedOptions.style.display = 'none';
+            toggleButton.textContent = 'Show Advanced Options';
+        }
+    }
+
     function addFiles() {
         const fileInput = document.getElementById("imageUpload");
         const fileNamesDisplay = document.getElementById("fileNames");
-        
+
         const files = Array.from(fileInput.files);
 
         if (!uploadedFiles["imageFiles[]"]) {
@@ -48,7 +137,7 @@
     function removeAddedFile(fileName) {
         // Remove the file from uploadedFiles
         uploadedFiles["imageFiles[]"] = uploadedFiles["imageFiles[]"].filter(f => f.name !== fileName);
-        
+
         // Remove the displayed filename
         document.getElementById(`added-${fileName}`).remove();
     }
@@ -59,15 +148,47 @@
     }
 
     // populate form values from plugin settings
-    document.addEventListener('DOMContentLoaded', () => {    
+    document.addEventListener('DOMContentLoaded', () => {
         const fileNamesDisplay = document.getElementById("fileNames");
         const hiddenFileInputs = document.getElementById("hiddenFileInputs");
+
         if (loadPluginSettings) {
-            const existingFiles = pluginSettings['imageFiles[]'] || []
+            // Load display options
+            if (pluginSettings.portraitMode === 'true') {
+                document.getElementById('portraitMode').checked = true;
+                document.getElementById('portraitMode').value = 'true';
+            }
+
+            if (pluginSettings.zoomLevel) {
+                document.getElementById('zoomLevel').value = pluginSettings.zoomLevel;
+            }
+
+            // Load advanced options if they exist
+            if (pluginSettings.rotation) {
+                document.getElementById('rotation').value = pluginSettings.rotation;
+                // Show advanced options if any are set
+                toggleAdvancedOptions();
+            }
+
+            if (pluginSettings.quality) {
+                document.getElementById('quality').value = pluginSettings.quality;
+            }
+
+            if (pluginSettings.centerX) {
+                document.getElementById('centerX').value = pluginSettings.centerX;
+                document.getElementById('centerXValue').textContent = pluginSettings.centerX + '%';
+            }
+
+            if (pluginSettings.centerY) {
+                document.getElementById('centerY').value = pluginSettings.centerY;
+                document.getElementById('centerYValue').textContent = pluginSettings.centerY + '%';
+            }
+
+            const existingFiles = pluginSettings['imageFiles[]'] || [];
 
             // Loop through the existing files and add them to the display and hidden inputs
             existingFiles.forEach(filePath => {
-                const fileName = filePath.split('/').pop()
+                const fileName = filePath.split('/').pop();
                 // Create an element for the file name
                 const fileElement = document.createElement("div");
                 fileElement.innerHTML = `
@@ -88,6 +209,15 @@
                 hiddenInput.setAttribute('delete-on-submit', '');
                 hiddenFileInputs.appendChild(hiddenInput);
             });
+        } else {
+            // Set default values for new settings
+            document.getElementById('portraitMode').checked = false;
+            document.getElementById('portraitMode').value = 'false';
+            document.getElementById('zoomLevel').value = '100';
+            document.getElementById('rotation').value = '0';
+            document.getElementById('quality').value = 'high';
+            document.getElementById('centerX').value = '50';
+            document.getElementById('centerY').value = '50';
         }
     });
 </script>
