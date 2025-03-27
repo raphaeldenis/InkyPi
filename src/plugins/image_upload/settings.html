@@ -38,6 +38,29 @@
         <span class="help-text">Lower zoom helps avoid cropping by showing more of the image</span>
     </div>
 
+    <!-- Timer Option -->
+    <div class="form-group">
+        <label for="timerEnabled">Change Images Automatically:</label>
+        <input type="checkbox" id="timerEnabled" name="timerEnabled"
+            onclick="this.value=this.checked ? 'true' : 'false'; toggleTimerOptions();">
+        <span class="help-text">Enable timer to change images automatically</span>
+    </div>
+
+    <div id="timerOptions" style="display: none; margin-left: 20px; margin-bottom: 15px;">
+        <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
+            <label for="timerValue">Change every:</label>
+            <input type="number" id="timerValue" name="timerValue" class="form-input" min="1" max="9999" value="1"
+                style="width: 80px;">
+            <select id="timerUnit" name="timerUnit" class="form-input">
+                <option value="s">Seconds</option>
+                <option value="m" selected>Minutes</option>
+                <option value="h">Hours</option>
+                <option value="d">Days</option>
+            </select>
+        </div>
+        <span class="help-text">Set how frequently the display changes to the next image</span>
+    </div>
+
     <!-- Advanced options toggle -->
     <div class="form-group">
         <button type="button" onclick="toggleAdvancedOptions()" id="advancedToggle" class="action-button compact">
@@ -101,6 +124,13 @@
         }
     }
 
+    function toggleTimerOptions() {
+        const timerOptions = document.getElementById('timerOptions');
+        const timerEnabled = document.getElementById('timerEnabled').checked;
+
+        timerOptions.style.display = timerEnabled ? 'block' : 'none';
+    }
+
     function addFiles() {
         const fileInput = document.getElementById("imageUpload");
         const fileNamesDisplay = document.getElementById("fileNames");
@@ -161,6 +191,21 @@
 
             if (pluginSettings.zoomLevel) {
                 document.getElementById('zoomLevel').value = pluginSettings.zoomLevel;
+            }
+
+            // Load timer settings
+            if (pluginSettings.timerEnabled === 'true') {
+                document.getElementById('timerEnabled').checked = true;
+                document.getElementById('timerEnabled').value = 'true';
+                document.getElementById('timerOptions').style.display = 'block';
+            }
+
+            if (pluginSettings.timerValue) {
+                document.getElementById('timerValue').value = pluginSettings.timerValue;
+            }
+
+            if (pluginSettings.timerUnit) {
+                document.getElementById('timerUnit').value = pluginSettings.timerUnit;
             }
 
             // Load advanced options if they exist

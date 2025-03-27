@@ -172,12 +172,26 @@ class Weather(BasePlugin):
             "icon": self.get_plugin_dir('icons/humidity.png')
         })
 
-        data_points.append({
-            "label": "Pression",
-            "measurement": weather.get('current', {}).get("pressure"),
-            "unit": 'hPa',
-            "icon": self.get_plugin_dir('icons/pressure.png')
-        })
+        # Replace pressure with max temperature for today
+        today_max_temp = None
+        if weather.get('daily') and len(weather.get('daily')) > 0:
+            today_max_temp = weather.get('daily')[0].get('temp', {}).get('max')
+
+        if today_max_temp is not None:
+            data_points.append({
+                "label": "Tendance",  # "Trend" in French, better name for max temperature
+                "measurement": round(today_max_temp),
+                "unit": UNITS[units]["temperature"],
+                "icon": self.get_plugin_dir('icons/01d.png')  # Using clear day icon for temperature
+            })
+        else:
+            # Fallback to pressure if max temp not available
+            data_points.append({
+                "label": "Tendance",
+                "measurement": weather.get('current', {}).get("pressure"),
+                "unit": 'hPa',
+                "icon": self.get_plugin_dir('icons/pressure.png')
+            })
 
         data_points.append({
             "label": "Indice UV",
