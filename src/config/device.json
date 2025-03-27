@@ -1,0 +1,45 @@
+{
+    "name": "InkyPi",
+    "orientation": "horizontal",
+    "scheduler_sleep_time": 60,
+    "startup": false,
+    "resolution": [
+        800,
+        480
+    ],
+    "playlist_config": {
+        "playlists": [
+            {
+                "name": "Default",
+                "start_time": "00:00",
+                "end_time": "24:00",
+                "plugins": [
+                    {
+                        "plugin_id": "icalendar",
+                        "name": "ICLOUD",
+                        "plugin_settings": {
+                            "title": "",
+                            "calendarUrl": "webcal://p106-caldav.icloud.com/published/2/NDUxNzg1NTQxNDUxNzg1NUI0ZiQYjVBr56bdRe2riRIAI3jHpuCI0MTrlG7Ars8CaraFQNkAEw9FRtb23FXDwiwO_6kRuzNsAR69vK1ir5s",
+                            "viewMode": "day",
+                            "colorScheme": "blue",
+                            "daysToShow": "7",
+                            "maxEvents": "15"
+                        },
+                        "refresh": {
+                            "interval": 7200
+                        },
+                        "latest_refresh_time": "2025-03-27T13:59:05.562401+00:00"
+                    }
+                ],
+                "current_plugin_index": 0
+            }
+        ],
+        "active_playlist": "Default"
+    },
+    "refresh_info": {
+        "refresh_time": "2025-03-27T14:21:04.876163+00:00",
+        "image_hash": "9dbce7b8912f253b28c9a33fcbcdd737d9aaff8e508769cd2d61b1b1cb267824",
+        "refresh_type": "Manual Update",
+        "plugin_id": "icalendar"
+    }
+}

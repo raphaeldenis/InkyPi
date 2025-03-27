@@ -1,0 +1,128 @@
+<div class="form-group">
+    <label for="title" class="form-label">Calendar Title:</label>
+    <input type="text" class="form-control" id="title" name="title" placeholder="My Calendar">
+</div>
+
+<div class="form-group">
+    <label for="calendar-url" class="form-label">iCalendar URL:</label>
+    <input type="text" class="form-control" id="calendar-url" name="calendarUrl"
+        placeholder="https://calendar.google.com/calendar/ical/...">
+    <small class="form-text text-muted">
+        Paste the iCalendar URL from your calendar provider (Google Calendar, Apple Calendar, Outlook, etc.)
+        <br>Both https:// and webcal:// URLs are supported.
+    </small>
+</div>
+
+<div class="form-group">
+    <label for="view-mode" class="form-label">View Mode:</label>
+    <select class="form-select" id="view-mode" name="viewMode">
+        <option value="list">List View</option>
+        <option value="week">Week View</option>
+        <option value="day">Day View</option>
+    </select>
+    <small class="form-text text-muted">
+        Choose how your calendar will be displayed.
+    </small>
+</div>
+
+<div class="form-group">
+    <label for="color-scheme" class="form-label">Color Scheme:</label>
+    <select class="form-select" id="color-scheme" name="colorScheme">
+        <option value="blue">Blue</option>
+        <option value="green">Green</option>
+        <option value="purple">Purple</option>
+        <option value="dark">Dark</option>
+        <option value="inky">E-Ink Optimized</option>
+    </select>
+    <small class="form-text text-muted">
+        Select a color theme for your calendar. "E-Ink Optimized" is best for most e-ink displays.
+    </small>
+</div>
+
+<div class="form-group">
+    <label for="days-to-show" class="form-label">Days to Show:</label>
+    <select class="form-select" id="days-to-show" name="daysToShow">
+        <option value="1">1 day</option>
+        <option value="3">3 days</option>
+        <option value="7" selected>7 days</option>
+        <option value="14">14 days</option>
+        <option value="30">30 days</option>
+    </select>
+    <small class="form-text text-muted">
+        How many days of events to fetch from your calendar.
+    </small>
+</div>
+
+<div class="form-group">
+    <label for="max-events" class="form-label">Maximum Events:</label>
+    <select class="form-select" id="max-events" name="maxEvents">
+        <option value="5">5 events</option>
+        <option value="10" selected>10 events</option>
+        <option value="15">15 events</option>
+        <option value="20">20 events</option>
+    </select>
+    <small class="form-text text-muted">
+        Maximum number of events to display.
+    </small>
+</div>
+
+<script>
+    // Initialize form values from existing settings if available
+    document.addEventListener('DOMContentLoaded', () => {
+        if (typeof loadPluginSettings !== 'undefined' && loadPluginSettings && pluginSettings) {
+            // Title
+            if (pluginSettings.title) {
+                document.getElementById('title').value = pluginSettings.title;
+            }
+
+            // Calendar URL
+            if (pluginSettings.calendarUrl) {
+                document.getElementById('calendar-url').value = pluginSettings.calendarUrl;
+            }
+
+            // View Mode
+            if (pluginSettings.viewMode) {
+                const viewModeSelect = document.getElementById('view-mode');
+                for (let i = 0; i < viewModeSelect.options.length; i++) {
+                    if (viewModeSelect.options[i].value === pluginSettings.viewMode) {
+                        viewModeSelect.selectedIndex = i;
+                        break;
+                    }
+                }
+            }
+
+            // Color Scheme
+            if (pluginSettings.colorScheme) {
+                const colorSchemeSelect = document.getElementById('color-scheme');
+                for (let i = 0; i < colorSchemeSelect.options.length; i++) {
+                    if (colorSchemeSelect.options[i].value === pluginSettings.colorScheme) {
+                        colorSchemeSelect.selectedIndex = i;
+                        break;
+                    }
+                }
+            }
+
+            // Days to show
+            if (pluginSettings.daysToShow) {
+                const daysSelect = document.getElementById('days-to-show');
+                for (let i = 0; i < daysSelect.options.length; i++) {
+                    if (daysSelect.options[i].value === pluginSettings.daysToShow) {
+                        daysSelect.selectedIndex = i;
+                        break;
+                    }
+                }
+            }
+
+            // Max events
+            if (pluginSettings.maxEvents) {
+                const eventsSelect = document.getElementById('max-events');
+                for (let i = 0; i < eventsSelect.options.length; i++) {
+                    if (eventsSelect.options[i].value === pluginSettings.maxEvents) {
+                        eventsSelect.selectedIndex = i;
+                        break;
+                    }
+                }
+            }
+        }
+    });
+</script>

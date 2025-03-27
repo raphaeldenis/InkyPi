@@ -1,14 +1,38 @@
 import os
-from inky.auto import auto
 from utils.image_utils import resize_image, change_orientation
 from plugins.plugin_registry import get_plugin_instance
 
+# Import mock display for development mode
+from mock_display import MockDisplay
 
 class DisplayManager:
     def __init__(self, device_config):
         """Manages the display and rendering of images."""
         self.device_config = device_config
-        self.inky_display = auto()
+        
+        # Check if we should use the mock display
+        use_mock = os.environ.get('INKYPI_MOCK_DISPLAY', 'false').lower() == 'true'
+        
+        if use_mock:
+            # Get resolution from config or use default
+            resolution = device_config.get_config("resolution")
+            if resolution:
+                width, height = resolution
+            else:
+                width, height = 800, 480  # Default to 7.3" display size
+                
+            self.inky_display = MockDisplay(width=width, height=height)
+            print(f"Using mock display with resolution {width}x{height}")
+        else:
+            # Import inky only when using the real display to avoid import errors
+            try:
+                from inky.auto import auto
+                self.inky_display = auto()
+            except ImportError as e:
+                print(f"Error importing inky library: {e}")
+                print("Falling back to mock display...")
+                self.inky_display = MockDisplay(width=800, height=480)
+        
         self.inky_display.set_border(self.inky_display.BLACK)
 
         # store display resolution in device config
