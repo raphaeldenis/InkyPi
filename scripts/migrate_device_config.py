@@ -182,9 +182,11 @@ def migrate_instance(instance: dict, options: MigrationOptions, location: str) -
 
 def apply_refresh_interval(instance: dict, plugin_id: str, options: MigrationOptions) -> None:
     interval_seconds = options.instance_intervals_seconds.get(plugin_id)
-    if interval_seconds is None:
+    refresh = instance.get("refresh", {})
+    is_scheduled_at_a_time_of_day = "scheduled" in refresh
+    if interval_seconds is None or is_scheduled_at_a_time_of_day:
         return
-    instance["refresh"] = {**instance.get("refresh", {}), "interval": interval_seconds}
+    instance["refresh"] = {**refresh, "interval": interval_seconds}
 
 
 def apply_weather_rules(instance: dict, options: MigrationOptions) -> None:
