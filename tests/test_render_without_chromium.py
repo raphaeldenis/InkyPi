@@ -2,6 +2,7 @@ import logging
 import time
 
 import pytest
+from PIL import Image
 
 from config import Config
 from display.display_manager import DisplayManager
@@ -26,6 +27,19 @@ def screen_output_dir(tmp_path):
     output_dir = tmp_path / "screen"
     output_dir.mkdir()
     return output_dir
+
+
+@pytest.fixture
+def previous_screen(screen_output_dir, tmp_path):
+    """Writes the screen a previous run left behind and returns {path: bytes}."""
+    previous_files = {
+        tmp_path / "current_image.png": (12, 34, 56),
+        screen_output_dir / "latest.png": (78, 90, 12),
+        screen_output_dir / "display_20200101_000000.png": (34, 56, 78),
+    }
+    for path, color in previous_files.items():
+        Image.new("RGB", (800, 480), color).save(path, "PNG")
+    return {path: path.read_bytes() for path in previous_files}
 
 
 @pytest.fixture
@@ -91,6 +105,18 @@ def test_refresh_cycle_logs_the_failure_and_keeps_running_when_no_browser_is_ins
     assert "No Chromium-based browser found" in info_logs.text
     assert list(screen_output_dir.iterdir()) == []
     assert not (tmp_path / "current_image.png").exists()
+
+
+def test_failed_refresh_cycles_leave_the_previous_screen_untouched(
+    no_chromium_binary, info_logs, previous_screen, started_refresh_task, screen_output_dir
+):
+    several_cycles_failed = wait_until(lambda: info_logs.text.count("Exception during refresh") >= 3)
+
+    assert several_cycles_failed
+    assert {path: path.read_bytes() for path in previous_screen} == previous_screen
+    assert {path.name for path in screen_output_dir.iterdir()} == {
+        path.name for path in previous_screen if path.parent == screen_output_dir
+    }
 
 
 def test_refresh_cycle_writes_the_screen_when_a_browser_renders(

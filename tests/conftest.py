@@ -1,5 +1,7 @@
+import builtins
 import json
 import os
+import socket
 from pathlib import Path
 
 import pytest
@@ -16,18 +18,122 @@ CONFIG_BASE_DEVICE_JSON = REPO_ROOT / "install" / "config_base" / "device.json"
 REAL_DEVICE_JSON = SRC_DIR / "config" / "device.json"
 
 
-SECRET_ENVIRONMENT_NAME_SUFFIXES = ("_KEY", "_SECRET", "_TOKEN", "_URL", "_PASSWORD")
+ALLOWED_ENVIRONMENT_NAMES = frozenset({"PATH", "HOME", "LANG", "TMPDIR", "VIRTUAL_ENV"})
+ALLOWED_ENVIRONMENT_NAME_PREFIXES = ("LC_", "PYTHON", "PYTEST_")
+
+
+def is_allowed_environment_name(name):
+    return name in ALLOWED_ENVIRONMENT_NAMES or name.startswith(ALLOWED_ENVIRONMENT_NAME_PREFIXES)
 
 
 @pytest.fixture(autouse=True)
 def isolate_tests_from_dotenv_and_environment(monkeypatch):
-    """Keeps every test away from a real .env file and from secrets exported in the shell."""
+    """Keeps every test away from a real .env file and leaves it only the allowlisted shell variables.
+
+    Tests that need a setting (weather, calendar) inject it explicitly with monkeypatch.setenv.
+    """
     monkeypatch.setattr(config_module, "load_dotenv", lambda *args, **kwargs: False)
-    secret_environment_names = [
-        name for name in os.environ if name.endswith(SECRET_ENVIRONMENT_NAME_SUFFIXES)
-    ]
-    for name in secret_environment_names:
+    names_outside_allowlist = [name for name in os.environ if not is_allowed_environment_name(name)]
+    for name in names_outside_allowlist:
         monkeypatch.delenv(name)
+
+
+class OutboundNetworkBlocked(AssertionError):
+    pass
+
+
+class OutboundNetworkGuard:
+    """Refuses every outbound connection and name lookup except towards the explicitly allowed hosts."""
+
+    def __init__(self):
+        self._allowed_hosts = set()
+
+    def allow(self, host):
+        self._allowed_hosts.add(host)
+
+    def check(self, host):
+        if host not in self._allowed_hosts:
+            raise OutboundNetworkBlocked(f"outbound network call to {host!r} blocked by the test suite")
+
+
+def host_of(address):
+    is_internet_address = isinstance(address, tuple) and bool(address)
+    return address[0] if is_internet_address else address
+
+
+@pytest.fixture(autouse=True)
+def outbound_network_guard(monkeypatch):
+    guard = OutboundNetworkGuard()
+    real_connect = socket.socket.connect
+    real_create_connection = socket.create_connection
+    real_getaddrinfo = socket.getaddrinfo
+
+    def guarded_connect(sock, address):
+        guard.check(host_of(address))
+        return real_connect(sock, address)
+
+    def guarded_create_connection(address, *args, **kwargs):
+        guard.check(host_of(address))
+        return real_create_connection(address, *args, **kwargs)
+
+    def guarded_getaddrinfo(host, *args, **kwargs):
+        guard.check(host)
+        return real_getaddrinfo(host, *args, **kwargs)
+
+    monkeypatch.setattr(socket.socket, "connect", guarded_connect)
+    monkeypatch.setattr(socket, "create_connection", guarded_create_connection)
+    monkeypatch.setattr(socket, "getaddrinfo", guarded_getaddrinfo)
+    return guard
+
+
+class RealFileAccessRecorder:
+    """Refuses to open or stat the real .env and device.json and remembers every attempt."""
+
+    def __init__(self, forbidden_paths):
+        self.forbidden_paths = {os.path.abspath(path) for path in forbidden_paths}
+        self.attempts = []
+
+    def refuse_if_real(self, path):
+        is_real_dotenv = isinstance(path, (str, os.PathLike)) and os.path.abspath(path) in self.forbidden_paths
+        if is_real_dotenv:
+            self.attempts.append(os.fspath(path))
+            raise PermissionError(f"the test suite never touches a real secret file: {path}")
+
+
+@pytest.fixture(autouse=True)
+def real_files_access(monkeypatch, tmp_path):
+    """Serves the API Keys blueprint from a disposable .env and records any access to the real .env or device.json."""
+    from blueprints import apikeys as apikeys_module
+
+    real_secret_file_paths = [REPO_ROOT / ".env", apikeys_module.get_env_path(), REAL_DEVICE_JSON]
+    recorder = RealFileAccessRecorder(real_secret_file_paths)
+    real_open = builtins.open
+    real_exists = os.path.exists
+    real_stat = os.stat
+
+    def recording_open(file, *args, **kwargs):
+        recorder.refuse_if_real(file)
+        return real_open(file, *args, **kwargs)
+
+    def recording_exists(path):
+        recorder.refuse_if_real(path)
+        return real_exists(path)
+
+    def recording_stat(path, *args, **kwargs):
+        recorder.refuse_if_real(path)
+        return real_stat(path, *args, **kwargs)
+
+    disposable_dotenv = tmp_path / "api_keys.env"
+    monkeypatch.setattr(builtins, "open", recording_open)
+    monkeypatch.setattr(os.path, "exists", recording_exists)
+    monkeypatch.setattr(os, "stat", recording_stat)
+    monkeypatch.setattr(apikeys_module, "get_env_path", lambda: str(disposable_dotenv))
+    return recorder
+
+
+@pytest.fixture
+def disposable_dotenv(tmp_path):
+    return tmp_path / "api_keys.env"
 
 
 @pytest.fixture(autouse=True)
