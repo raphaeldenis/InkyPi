@@ -1,0 +1,38 @@
+{
+    "name": "InkyPi",
+    "orientation": "horizontal",
+    "resolution": [800, 480],
+    "timezone": "Europe/Paris",
+    "scheduler_sleep_time": 60,
+    "plugin_cycle_interval_seconds": 3600,
+    "startup": true,
+    "playlist_config": {
+        "playlists": [
+            {
+                "name": "Default",
+                "start_time": "00:00",
+                "end_time": "24:00",
+                "plugins": [
+                    {
+                        "plugin_id": "icalendar",
+                        "name": "Agenda",
+                        "plugin_settings": {
+                            "title": "Agenda",
+                            "viewMode": "list",
+                            "colorScheme": "inky",
+                            "daysToShow": "7",
+                            "maxEvents": "10"
+                        },
+                        "refresh": {
+                            "interval": 3600
+                        },
+                        "latest_refresh_time": null
+                    }
+                ],
+                "current_plugin_index": null
+            }
+        ],
+        "active_playlist": "Default"
+    },
+    "refresh_info": {}
+}

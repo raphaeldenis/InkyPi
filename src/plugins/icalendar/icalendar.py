@@ -16,6 +16,8 @@ import tempfile
 
 logger = logging.getLogger(__name__)
 
+CALENDAR_URL_ENV_KEY = "CALENDAR_URL"
+LEGACY_CALENDAR_URL_SETTING_KEY = "calendarUrl"
 DEFAULT_TIMEZONE = "US/Eastern"
 DEFAULT_DAYS_TO_SHOW = 7
 DEFAULT_MAX_EVENTS = 10
@@ -95,6 +97,10 @@ COLOR_SCHEMES = {
     }
 }
 
+def drop_legacy_calendar_url(settings):
+    settings.pop(LEGACY_CALENDAR_URL_SETTING_KEY, None)
+
+
 class ICalendar(BasePlugin):
     def generate_settings_template(self):
         template_params = super().generate_settings_template()
@@ -103,7 +109,10 @@ class ICalendar(BasePlugin):
 
     def generate_image(self, settings, device_config):
         # Get settings
-        url = settings.get('calendarUrl', '')
+        drop_legacy_calendar_url(settings)
+        url = device_config.load_env_key(CALENDAR_URL_ENV_KEY) or ''
+        if not url:
+            logger.warning("calendar URL not configured")
         days_to_show = int(settings.get('daysToShow', DEFAULT_DAYS_TO_SHOW))
         max_events = int(settings.get('maxEvents', DEFAULT_MAX_EVENTS))
         title = settings.get('title', 'Calendar')
@@ -513,7 +522,7 @@ class ICalendar(BasePlugin):
             return event_list
             
         except Exception as e:
-            logger.error(f"Error fetching calendar: {str(e)}")
+            logger.error(f"Error fetching calendar: {type(e).__name__}")
             return []
     
     def render_error_image(self, dimensions, error_message):

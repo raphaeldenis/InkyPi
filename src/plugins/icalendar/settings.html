@@ -4,12 +4,8 @@
 </div>
 
 <div class="form-group">
-    <label for="calendar-url" class="form-label">iCalendar URL:</label>
-    <input type="text" class="form-control" id="calendar-url" name="calendarUrl"
-        placeholder="https://calendar.google.com/calendar/ical/...">
     <small class="form-text text-muted">
-        Paste the iCalendar URL from your calendar provider (Google Calendar, Apple Calendar, Outlook, etc.)
-        <br>Both https:// and webcal:// URLs are supported.
+        The iCalendar URL is configured in the .env file (CALENDAR_URL).
     </small>
 </div>
 
@@ -73,11 +69,6 @@
             // Title
             if (pluginSettings.title) {
                 document.getElementById('title').value = pluginSettings.title;
-            }
-
-            // Calendar URL
-            if (pluginSettings.calendarUrl) {
-                document.getElementById('calendar-url').value = pluginSettings.calendarUrl;
             }
 
             // View Mode

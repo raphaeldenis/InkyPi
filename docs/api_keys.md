@@ -30,6 +30,25 @@ Required for the AI Image and AI Text Plugins
     OPEN_AI_SECRET=your-key
     ```
 
+## Calendar URL
+
+Required for the Calendar (iCalendar) Plugin
+
+- Copy the iCalendar link from your calendar provider (Google Calendar, Apple Calendar, Outlook, etc.). Both `https://` and `webcal://` links are supported.
+- Store it in the .env file with the key CALENDAR_URL. It is never stored in `device.json` and must never be committed.
+    ```
+    CALENDAR_URL=your-calendar-link
+    ```
+- Without it, the calendar renders with no events.
+
+## Development setup
+
+A fresh clone has no `src/config/device.json` (it is not tracked). Create it from the minimal base config, or start from `src/config/device.example.json`:
+
+```bash
+cp install/config_base/device.json src/config/device.json
+```
+
 ## Open Weather Map
 
 Required for the Weather Plugin
