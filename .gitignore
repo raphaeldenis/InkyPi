@@ -166,6 +166,11 @@ cython_debug/
 # Development artifacts
 mock_display_output/
 
+# Device state, never committed
+/src/config/device.json
+/src/config/device.backup*.json
+/src/current_display.png
+
 # IDE files
 .idea
 
