@@ -8,7 +8,7 @@ from astral import moon
 import pytz
 from io import BytesIO
 import math
-from plugins.weather.labels import format_long_date, format_weekday_abbreviation, get_labels, resolve_language, translate_data_points
+from plugins.weather.labels import LABELS, format_long_date, format_weekday_abbreviation, resolve_language, translate_data_points
 
 logger = logging.getLogger(__name__)
         
@@ -138,9 +138,7 @@ class Weather(BasePlugin):
         else:
             last_refresh_time = now.strftime("%Y-%m-%d %I:%M %p")
         template_params["last_refresh_time"] = last_refresh_time
-        labels = get_labels(language)
-        template_params["last_refresh_label"] = labels["last_refresh"]
-        template_params["feels_like_label"] = labels["feels_like"]
+        template_params["labels"] = LABELS[language]
 
         image = self.render_image(dimensions, "weather.html", "weather.css", template_params)
 
@@ -148,7 +146,7 @@ class Weather(BasePlugin):
             raise RuntimeError("Failed to take screenshot, please check logs.")
         return image
 
-    def parse_weather_data(self, weather_data, aqi_data, tz, units, time_format, lat, language="en"):
+    def parse_weather_data(self, weather_data, aqi_data, tz, units, time_format, lat, language):
         current = weather_data.get("current")
         daily_forecast = weather_data.get("daily", [])
         dt = datetime.fromtimestamp(current.get('dt'), tz=timezone.utc).astimezone(tz)
@@ -175,7 +173,7 @@ class Weather(BasePlugin):
         data['hourly_forecast'] = self.parse_hourly(weather_data.get('hourly'), tz, time_format, units, daily_forecast)
         return data
 
-    def parse_open_meteo_data(self, weather_data, aqi_data, tz, units, time_format, lat, language="en"):
+    def parse_open_meteo_data(self, weather_data, aqi_data, tz, units, time_format, lat, language):
         current = weather_data.get("current", {})
         daily = weather_data.get('daily', {})
         dt = datetime.fromisoformat(current.get('time')).astimezone(tz) if current.get('time') else datetime.now(tz)
@@ -271,7 +269,7 @@ class Weather(BasePlugin):
         
         return self.get_plugin_dir(f"icons/{phase_name}.png")
 
-    def parse_forecast(self, daily_forecast, tz, current_suffix, lat, language="en"):
+    def parse_forecast(self, daily_forecast, tz, current_suffix, lat, language):
         """
         - daily_forecast: list of daily entries from One‑Call v3 (each has 'dt', 'weather', 'temp', 'moon_phase')
         - tz: your target tzinfo (e.g. from zoneinfo or pytz)
@@ -337,7 +335,7 @@ class Weather(BasePlugin):
 
         return forecast
         
-    def parse_open_meteo_forecast(self, daily_data, units, tz, is_day, lat, language="en"):
+    def parse_open_meteo_forecast(self, daily_data, units, tz, is_day, lat, language):
         """
         Parse the daily forecast from Open-Meteo API and calculate moon phase and illumination using the local 'astral' library.
         """
