@@ -29,6 +29,14 @@
     </select>
 </div>
 
+<div class="form-group">
+    <label for="language" class="form-label">Language:</label>
+    <select id="language" name="language" class="form-input">
+        <option value="en">English</option>
+        <option value="fr">Français</option>
+    </select>
+</div>
+
 <div class="form-group" id="titleOptionWrapper">
     <label class="form-label">Title:</label>
 
@@ -299,6 +307,7 @@
             document.getElementById('longitude').value = pluginSettings.longitude ?? '';
 
             document.getElementById('units').value = pluginSettings.units;
+            document.getElementById('language').value = pluginSettings.language || 'en';
 
             document.getElementById('displayRefreshTime').checked = pluginSettings.displayRefreshTime;
             document.getElementById('displayRefreshTime').value = pluginSettings.displayRefreshTime;
@@ -332,6 +341,7 @@
         } else {
             // set default values
             document.getElementById('units').value = "imperial";
+            document.getElementById('language').value = "en";
             document.getElementById('displayRefreshTime').checked = true;
             document.getElementById('displayRefreshTime').value = "true";
             document.getElementById('displayMetrics').checked = true;
