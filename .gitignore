@@ -160,5 +160,12 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
+# Device state and generated images
+src/config/device*.json
+!src/config/device.example.json
+src/calendar_temp.png
+src/calendar_temp.png.png
+src/current_display.png
+
 # Ignore Mac DS_Store files
 .DS_Store
