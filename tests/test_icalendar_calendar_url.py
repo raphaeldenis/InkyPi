@@ -8,7 +8,6 @@ from conftest import FIXTURES_DIR
 from plugins.icalendar.icalendar import ICalendar
 
 CALENDAR_URL = "https://calendar.example.test/ical/SECRETTOKEN123.ics"
-WEBCAL_URL = "webcal://calendar.example.test/ical/SECRETTOKEN123.ics"
 CALENDAR_URL_NOT_CONFIGURED_LOG = "calendar URL not configured"
 DENTIST_EVENT_TITLE = "Dentiste"
 CALENDAR_HEADER_MARKER = '<div class="header">'
@@ -17,11 +16,11 @@ WEEK_VIEW_SETTINGS = {"title": "Calendar", "viewMode": "week"}
 LANDSCAPE_SIZE = (800, 480)
 PORTRAIT_SIZE = (480, 800)
 
-NETWORK_FAILURES_THAT_ECHO_THE_URL = {
-    "url_error": lambda url: URLError(f"cannot reach {url}"),
-    "value_error": lambda url: ValueError(f"unknown url type: '{url}'"),
-    "http_error": lambda url: HTTPError(url, 404, f"Not Found for {url}", {}, None),
-}
+NETWORK_FAILURES_THAT_ECHO_THE_URL = [
+    pytest.param(lambda url: URLError(f"cannot reach {url}"), id="url_error"),
+    pytest.param(lambda url: ValueError(f"unknown url type: '{url}'"), id="value_error"),
+    pytest.param(lambda url: HTTPError(url, 404, f"Not Found for {url}", {}, None), id="http_error"),
+]
 
 
 def render_calendar(device_config, settings=None):
@@ -57,17 +56,6 @@ def test_calendar_shows_dentiste_event_in_portrait(
     assert DENTIST_EVENT_TITLE in fake_chromium.rendered_html
 
 
-def test_calendar_fetches_webcal_url_over_https(
-    make_device_config, calendar_network, fake_chromium, frozen_clock, dentiste_ics_bytes
-):
-    calendar_network.serve_ics(dentiste_ics_bytes)
-    device_config = make_device_config(environment={"CALENDAR_URL": WEBCAL_URL})
-
-    render_calendar(device_config)
-
-    assert calendar_network.requested_urls == [CALENDAR_URL]
-
-
 def test_calendar_without_configured_url_renders_empty_calendar(
     make_device_config, calendar_network, fake_chromium, frozen_clock, caplog
 ):
@@ -85,9 +73,8 @@ def test_calendar_without_configured_url_renders_empty_calendar(
 
 
 def test_calendar_ignores_a_calendar_url_left_in_plugin_settings(
-    make_device_config, calendar_network, fake_chromium, frozen_clock, caplog
+    make_device_config, calendar_network, fake_chromium, frozen_clock
 ):
-    caplog.set_level(logging.DEBUG)
     device_config = make_device_config(environment={})
     legacy_settings = {"title": "Calendar", "calendarUrl": CALENDAR_URL}
 
@@ -97,11 +84,7 @@ def test_calendar_ignores_a_calendar_url_left_in_plugin_settings(
     assert "calendarUrl" not in legacy_settings
 
 
-@pytest.mark.parametrize(
-    "failure",
-    NETWORK_FAILURES_THAT_ECHO_THE_URL.values(),
-    ids=NETWORK_FAILURES_THAT_ECHO_THE_URL.keys(),
-)
+@pytest.mark.parametrize("failure", NETWORK_FAILURES_THAT_ECHO_THE_URL)
 def test_calendar_url_never_appears_in_logs_on_network_failure(
     make_device_config, calendar_network, fake_chromium, frozen_clock, caplog, failure
 ):

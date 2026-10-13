@@ -146,23 +146,6 @@ def dentiste_ics_bytes():
     return (FIXTURES_DIR / "dentiste.ics").read_bytes()
 
 
-@pytest.fixture
-def write_device_json(tmp_path, monkeypatch):
-    """Writes a device.json under tmp_path and points Config at it."""
-    device_json = tmp_path / "device.json"
-    plugin_image_dir = tmp_path / "plugin_images"
-    plugin_image_dir.mkdir()
-
-    def write(extra_config=None):
-        base_config = json.loads(CONFIG_BASE_DEVICE_JSON.read_text())
-        device_json.write_text(json.dumps({**base_config, **(extra_config or {})}))
-        monkeypatch.setattr(Config, "config_file", str(device_json))
-        monkeypatch.setattr(Config, "plugin_image_dir", str(plugin_image_dir))
-        return device_json
-
-    return write
-
-
 def device_json_with_icalendar_instance():
     return {
         "resolution": DEFAULT_RESOLUTION,
@@ -189,7 +172,7 @@ def device_json_with_icalendar_instance():
 
 
 @pytest.fixture
-def make_app(write_device_json):
+def make_app(tmp_path, monkeypatch):
     """Builds a Flask app with the four blueprints over a tmp device.json."""
     from blueprints.main import main_bp
     from blueprints.playlist import playlist_bp
@@ -198,7 +181,13 @@ def make_app(write_device_json):
     from plugins.plugin_registry import load_plugins
 
     def build(extra_config=None):
-        write_device_json(extra_config)
+        base_config = json.loads(CONFIG_BASE_DEVICE_JSON.read_text())
+        device_json = tmp_path / "device.json"
+        device_json.write_text(json.dumps({**base_config, **(extra_config or {})}))
+        plugin_image_dir = tmp_path / "plugin_images"
+        plugin_image_dir.mkdir(exist_ok=True)
+        monkeypatch.setattr(Config, "config_file", str(device_json))
+        monkeypatch.setattr(Config, "plugin_image_dir", str(plugin_image_dir))
         device_config = Config()
         load_plugins([p for p in device_config.get_plugins() if p["id"] == "icalendar"])
 
