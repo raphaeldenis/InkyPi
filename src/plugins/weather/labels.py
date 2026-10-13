@@ -23,9 +23,9 @@ LABELS = {
         "Wind": "Vent",
         "Humidity": "Humidité",
         "Pressure": "Pression",
-        "UV Index": "Indice UV",
+        "UV Index": "UV",
         "Visibility": "Visibilité",
-        "Air Quality": "Qualité de l'air",
+        "Air Quality": "Qualité air",
     },
 }
 
@@ -34,7 +34,7 @@ AIR_QUALITY_SCALE_IN_FRENCH = {
     "Fair": "Passable",
     "Moderate": "Modéré",
     "Poor": "Mauvais",
-    "Very Poor": "Très mauvais",
+    "Very Poor": "T. mauvais",
     "Ext Poor": "Extrême",
 }
 
@@ -64,7 +64,9 @@ def format_long_date(moment, language):
         return moment.strftime("%A, %B %d")
     weekday = FRENCH_WEEKDAYS[moment.weekday()]
     month = FRENCH_MONTHS[moment.month - 1]
-    return f"{weekday} {moment.day} {month}"
+    is_first_of_month = moment.day == 1
+    day_of_month = "1er" if is_first_of_month else str(moment.day)
+    return f"{weekday} {day_of_month} {month}"
 
 
 def format_weekday_abbreviation(moment, language):

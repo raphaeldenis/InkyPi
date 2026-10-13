@@ -128,10 +128,24 @@ def fingerprint_of(html):
 def test_weather_plugin_renders_french_labels(provider, render_weather_html):
     html = render_weather_html(provider, language="fr")
 
-    for french_label in ["Humidité", "Pression", "Vent", "Ressenti", "Dernière mise à jour", "Indice UV", "Visibilité"]:
+    for french_label in ["Humidité", "Pression", "Vent", "Ressenti", "Dernière mise à jour", "Visibilité"]:
         assert french_label in html
     for english_label in ["Humidity", "Pressure", "Feels Like", "Last refresh", "UV Index", "Visibility", "Sunrise"]:
         assert english_label not in html
+
+
+@pytest.mark.parametrize("provider", BOTH_PROVIDERS)
+@pytest.mark.parametrize(
+    "english_label, french_label",
+    [("Sunrise", "Lever"), ("Sunset", "Coucher"), ("Air Quality", "Qualité air"), ("UV Index", "UV")],
+)
+def test_weather_plugin_renders_the_french_data_point_labels(provider, english_label, french_label, render_weather_html):
+    html = render_weather_html(provider, language="fr")
+
+    assert f">{french_label}<" in html
+    assert f'alt="{french_label}"' in html
+    assert f">{english_label}<" not in html
+    assert f'alt="{english_label}"' not in html
 
 
 @pytest.mark.parametrize("provider", BOTH_PROVIDERS)

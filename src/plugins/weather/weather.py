@@ -107,19 +107,19 @@ class Weather(BasePlugin):
                 if settings.get('weatherTimeZone', 'locationTimeZone') == 'locationTimeZone':
                     logger.info("Using location timezone for OpenWeatherMap data.")
                     wtz = self.parse_timezone(weather_data)
-                    template_params = self.parse_weather_data(weather_data, aqi_data, wtz, units, time_format, lat, language)
+                    template_params = self.parse_weather_data(weather_data, aqi_data, wtz, units, time_format, lat, language=language)
                 else:
                     logger.info("Using configured timezone for OpenWeatherMap data.")
-                    template_params = self.parse_weather_data(weather_data, aqi_data, tz, units, time_format, lat, language)
+                    template_params = self.parse_weather_data(weather_data, aqi_data, tz, units, time_format, lat, language=language)
             elif weather_provider == "OpenMeteo":
                 forecast_days = 7
                 weather_data = self.get_open_meteo_data(lat, long, units, forecast_days + 1)
                 aqi_data = self.get_open_meteo_air_quality(lat, long)
-                template_params = self.parse_open_meteo_data(weather_data, aqi_data, tz, units, time_format, lat, language)
+                template_params = self.parse_open_meteo_data(weather_data, aqi_data, tz, units, time_format, lat, language=language)
             else:
                 raise RuntimeError(f"Unknown weather provider: {weather_provider}")
 
-            template_params['data_points'] = translate_data_points(template_params['data_points'], language)
+            template_params['data_points'] = translate_data_points(template_params['data_points'], language=language)
             template_params['title'] = title
         except Exception as e:
             logger.error(f"{weather_provider} request failed: {str(e)}")
@@ -161,7 +161,7 @@ class Weather(BasePlugin):
             if current_icon.endswith('n'):
                 current_icon = current_icon.replace("n", "d")
         data = {
-            "current_date": format_long_date(dt, language),
+            "current_date": format_long_date(dt, language=language),
             "current_day_icon": self.get_plugin_dir(f'icons/{current_icon}.png'),
             "current_temperature": str(round(current.get("temp"))),
             "feels_like": str(round(current.get("feels_like"))),
@@ -169,7 +169,7 @@ class Weather(BasePlugin):
             "units": units,
             "time_format": time_format
         }
-        data['forecast'] = self.parse_forecast(weather_data.get('daily'), tz, current_suffix, lat, language)
+        data['forecast'] = self.parse_forecast(weather_data.get('daily'), tz, current_suffix, lat, language=language)
         data['data_points'] = self.parse_data_points(weather_data, aqi_data, tz, units, time_format)
 
         data['hourly_forecast'] = self.parse_hourly(weather_data.get('hourly'), tz, time_format, units, daily_forecast)
@@ -186,7 +186,7 @@ class Weather(BasePlugin):
         temperature_conversion = 273.15 if units == "standard" else 0.
 
         data = {
-            "current_date": format_long_date(dt, language),
+            "current_date": format_long_date(dt, language=language),
             "current_day_icon": self.get_plugin_dir(f'icons/{current_icon}.png'),
             "current_temperature": str(round(current.get("temperature", 0) + temperature_conversion)),
             "feels_like": str(round(current.get("apparent_temperature", current.get("temperature", 0)) + temperature_conversion)),
@@ -195,7 +195,7 @@ class Weather(BasePlugin):
             "time_format": time_format
         }
 
-        data['forecast'] = self.parse_open_meteo_forecast(weather_data.get('daily', {}), units, tz, is_day, lat, language)
+        data['forecast'] = self.parse_open_meteo_forecast(weather_data.get('daily', {}), units, tz, is_day, lat, language=language)
         data['data_points'] = self.parse_open_meteo_data_points(weather_data, aqi_data, units, tz, time_format)
         
         data['hourly_forecast'] = self.parse_open_meteo_hourly(weather_data.get('hourly', {}), units, tz, time_format, daily.get('sunrise', []), daily.get('sunset', []))
@@ -322,7 +322,7 @@ class Weather(BasePlugin):
 
             # --- date & temps ---
             dt = datetime.fromtimestamp(day["dt"], tz=timezone.utc).astimezone(tz)
-            day_label = format_weekday_abbreviation(dt, language)
+            day_label = format_weekday_abbreviation(dt, language=language)
 
             forecast.append(
                 {
@@ -353,7 +353,7 @@ class Weather(BasePlugin):
 
         for i in range(0, len(times)): 
             local_date = date.fromisoformat(times[i])
-            day_label = format_weekday_abbreviation(local_date, language)
+            day_label = format_weekday_abbreviation(local_date, language=language)
             code = weather_codes[i] if i < len(weather_codes) else 0
             weather_icon = self.map_weather_code_to_icon(code, is_day=1)
             weather_icon_path = self.get_plugin_dir(f"icons/{weather_icon}.png")
