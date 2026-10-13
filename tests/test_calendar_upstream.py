@@ -210,11 +210,6 @@ def test_two_calendars_are_both_read_in_the_given_order(serve_calendars, device_
     assert '"#336699"' in html and '"#996633"' in html
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=RuntimeError,
-    reason="upstream aborts the whole render when one calendar fails to load",
-)
 def test_failing_calendar_does_not_empty_the_other_one(monkeypatch, device_config, fake_browser_screenshot):
     def fake_get(url, *args, **kwargs):
         if url == FIRST_CALENDAR_URL:

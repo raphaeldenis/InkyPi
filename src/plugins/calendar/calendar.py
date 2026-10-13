@@ -73,8 +73,17 @@ class Calendar(BasePlugin):
     def fetch_ics_events(self, calendar_urls, colors, tz, start_range, end_range):
         parsed_events = []
 
+        last_fetch_error = None
+        loaded_calendar_count = 0
+
         for calendar_url, color in zip(calendar_urls, colors):
-            cal = self.fetch_calendar(calendar_url)
+            try:
+                cal = self.fetch_calendar(calendar_url)
+            except RuntimeError as fetch_error:
+                logger.warning(f"Skipping unreachable calendar: {fetch_error}")
+                last_fetch_error = fetch_error
+                continue
+            loaded_calendar_count += 1
             self.drop_events_without_start(cal)
             events = recurring_ical_events.of(cal).between(start_range, end_range)
             contrast_color = self.get_contrast_color(color)
@@ -92,6 +101,10 @@ class Calendar(BasePlugin):
                     parsed_event['end'] = end
 
                 parsed_events.append(parsed_event)
+
+        no_calendar_could_be_loaded = last_fetch_error is not None and loaded_calendar_count == 0
+        if no_calendar_could_be_loaded:
+            raise last_fetch_error
 
         return parsed_events
     
