@@ -1,0 +1,103 @@
+{
+    "name": "InkyPi",
+    "orientation": "horizontal",
+    "resolution": [800, 480],
+    "timezone": "Europe/Paris",
+    "scheduler_sleep_time": 60,
+    "plugin_cycle_interval_seconds": 3600,
+    "startup": true,
+    "playlist_config": {
+        "playlists": [
+            {
+                "name": "Default",
+                "start_time": "00:00",
+                "end_time": "24:00",
+                "plugins": [
+                    {
+                        "plugin_id": "icalendar",
+                        "name": "Agenda",
+                        "plugin_settings": {
+                            "title": "Agenda",
+                            "viewMode": "list",
+                            "colorScheme": "inky",
+                            "daysToShow": "7",
+                            "maxEvents": "10"
+                        },
+                        "refresh": {
+                            "interval": 3600
+                        },
+                        "latest_refresh_time": null
+                    },
+                    {
+                        "plugin_id": "weather",
+                        "name": "Meteo",
+                        "plugin_settings": {
+                            "latitude": "48.85",
+                            "longitude": "2.35",
+                            "units": "metric"
+                        },
+                        "refresh": {
+                            "interval": 3600
+                        },
+                        "latest_refresh_time": null
+                    },
+                    {
+                        "plugin_id": "image_upload",
+                        "name": "Photos",
+                        "plugin_settings": {
+                            "imageFiles[]": [
+                                "/var/example/photos/one.png",
+                                "/var/example/photos/two.png"
+                            ],
+                            "image_index": 0,
+                            "timerEnabled": "true",
+                            "timerValue": "10",
+                            "timerUnit": "m",
+                            "portraitMode": "true",
+                            "zoomLevel": "120",
+                            "rotation": "90",
+                            "quality": "high",
+                            "centerX": "50",
+                            "centerY": "40"
+                        },
+                        "refresh": {
+                            "interval": 3600
+                        },
+                        "latest_refresh_time": null
+                    }
+                ],
+                "current_plugin_index": null
+            },
+            {
+                "name": "Evening",
+                "start_time": "20:00",
+                "end_time": "23:00",
+                "plugins": [
+                    {
+                        "plugin_id": "icloud_calendar",
+                        "name": "Family",
+                        "plugin_settings": {
+                            "title": "Family"
+                        },
+                        "refresh": {
+                            "interval": 3600
+                        },
+                        "latest_refresh_time": null
+                    },
+                    {
+                        "plugin_id": "clock",
+                        "name": "Clock",
+                        "plugin_settings": {},
+                        "refresh": {
+                            "interval": 3600
+                        },
+                        "latest_refresh_time": null
+                    }
+                ],
+                "current_plugin_index": null
+            }
+        ],
+        "active_playlist": "Default"
+    },
+    "refresh_info": {}
+}
