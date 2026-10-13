@@ -1,0 +1,11 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//example.invalid//calendar-fixture//FR
+BEGIN:VEVENT
+UID:hostile@example.invalid
+DTSTAMP:20260101T000000Z
+DTSTART:@TODAY@T100000Z
+DTEND:@TODAY@T110000Z
+SUMMARY:</script><img src=x onerror=alert(1)>
+END:VEVENT
+END:VCALENDAR
