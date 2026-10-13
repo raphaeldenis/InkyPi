@@ -13,6 +13,8 @@ import pytest
 from PIL import Image
 
 from config import Config
+from display.display_manager import DisplayManager
+from model import Playlist
 from plugins.image_upload.image_upload import ImageUpload
 from refresh_task import PlaylistRefresh, RefreshTask
 
@@ -53,12 +55,12 @@ def fork_config():
 @pytest.fixture
 def migrate_with_report(migration):
     def run(config, **option_overrides):
-        options = migration.MigrationOptions(
-            display_type="inky",
-            known_plugin_ids=migration.discover_known_plugin_ids(PLUGINS_DIR),
-            plugin_cycle_interval_seconds=CHOSEN_CYCLE_INTERVAL_SECONDS,
-            **option_overrides,
-        )
+        settings = {
+            "display_type": "inky",
+            "known_plugin_ids": migration.discover_known_plugin_ids(PLUGINS_DIR),
+            "plugin_cycle_interval_seconds": CHOSEN_CYCLE_INTERVAL_SECONDS,
+        }
+        options = migration.MigrationOptions(**{**settings, **option_overrides})
         return migration.migrate_device_config_with_report(config, options)
 
     return run
@@ -115,7 +117,7 @@ def test_migration_drops_instances_of_removed_plugins(migrate_with_report, fork_
 
     assert instances_of(result.config, "icalendar") == []
     assert instances_of(result.config, "icloud_calendar") == []
-    assert sorted(result.removed_instance_names) == ["Agenda", "Family"]
+    assert sorted(removed.instance_name for removed in result.removed_instances) == ["Agenda", "Family"]
     assert [i["name"] for i in instances_of(result.config, "weather")] == ["Meteo", "MeteoMatin"]
 
 
@@ -364,6 +366,7 @@ def test_migration_changes_only_what_it_is_meant_to_change(migrate, fork_config)
         ("display_type",): ("added", "inky"),
         ("inverted_image",): ("added", False),
         ("plugin_cycle_interval_seconds",): ("changed", 3600, CHOSEN_CYCLE_INTERVAL_SECONDS),
+        playlists_path + ("Default", "current_plugin_index"): ("changed", 1, 0),
         instance_path("Default", "Agenda"): ("removed", before["playlist_config"]["playlists"]["Default"]["plugins"]["Agenda"]),
         instance_path("Evening", "Family"): ("removed", before["playlist_config"]["playlists"]["Evening"]["plugins"]["Family"]),
         instance_path("Default", "Meteo", "refresh", "interval"): ("changed", 1234, 3600),
@@ -390,7 +393,13 @@ def test_migration_changes_only_what_it_is_meant_to_change(migrate, fork_config)
 
 
 def migration_options(migration, **overrides):
-    settings = {"display_type": "inky", "known_plugin_ids": frozenset({"weather"})}
+    settings = {
+        "display_type": "inky",
+        "known_plugin_ids": frozenset({"weather"}),
+        "removable_plugin_ids": frozenset(
+            {"icalendar", "icloud_calendar", "weather", "clock", "calendar", "image_upload", "image_folder"}
+        ),
+    }
     settings.update(overrides)
     return migration.MigrationOptions(**settings)
 
@@ -508,7 +517,9 @@ def test_cli_applies_every_non_default_option(run_cli, tmp_path):
     plugins_dir = make_plugins_dir(tmp_path / "only_two_plugins", ["weather", "image_upload"])
 
     exit_code, stdout, _, written = run_cli(
-        "--cycle-interval-seconds", "7200", "--no-randomize", plugins_dir=plugins_dir, display_type="mock"
+        "--cycle-interval-seconds", "7200", "--no-randomize",
+        "--remove-plugin-id", "clock", "--remove-plugin-id", "calendar", "--remove-plugin-id", "image_folder",
+        plugins_dir=plugins_dir, display_type="mock",
     )
 
     migrated = json.loads(written)
@@ -616,10 +627,14 @@ PATHOLOGICAL_CONFIGS = {
     "plugins is null": corrupt(FIRST_PLAYLIST + ("plugins",), None),
     "instance without plugin_id": corrupt(METEO_INSTANCE + ("plugin_id",), REMOVE),
     "plugin_id is null": corrupt(METEO_INSTANCE + ("plugin_id",), None),
+    "plugin_id is a list": corrupt(METEO_INSTANCE + ("plugin_id",), [SENTINEL_VALUE]),
     "plugin_settings is null": corrupt(METEO_INSTANCE + ("plugin_settings",), None),
     "plugin_settings is a list": corrupt(METEO_INSTANCE + ("plugin_settings",), [SENTINEL_VALUE]),
     "refresh is null": corrupt(METEO_INSTANCE + ("refresh",), None),
     "refresh is a list": corrupt(METEO_INSTANCE + ("refresh",), [SENTINEL_VALUE]),
+    "current_plugin_index is a string": corrupt(FIRST_PLAYLIST + ("current_plugin_index",), SENTINEL_VALUE),
+    "current_plugin_index is a boolean": corrupt(FIRST_PLAYLIST + ("current_plugin_index",), True),
+    "current_plugin_index is a float": corrupt(FIRST_PLAYLIST + ("current_plugin_index",), 1.5),
 }
 
 
@@ -663,3 +678,222 @@ def test_cli_leaves_no_temporary_file_after_a_successful_write(run_cli, tmp_path
 
     assert exit_code == 0
     assert [path.name for path in tmp_path.glob("*.tmp")] == []
+
+
+# --- effective display type -----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("kept_display_type", ["unsupported", None, ["inky"], 3])
+def test_cli_refuses_a_display_type_kept_from_the_config_that_the_app_cannot_load(run_cli, fork_config, kept_display_type):
+    fork_config["display_type"] = kept_display_type
+
+    exit_code, _, stderr, written = run_cli(config=fork_config, display_type="inky")
+
+    assert exit_code == 2
+    assert written is None
+    assert stderr.startswith("refused: ")
+    assert "display" in stderr
+
+
+def test_cli_refuses_an_unsupported_display_type_option_even_when_the_config_has_a_valid_one(run_cli, fork_config):
+    fork_config["display_type"] = "mock"
+
+    exit_code, _, stderr, written = run_cli(config=fork_config, display_type="lcd")
+
+    assert exit_code == 2
+    assert "display" in stderr
+    assert written is None
+
+
+def test_cli_refusal_of_a_kept_display_type_does_not_quote_it(run_cli, fork_config):
+    fork_config["display_type"] = SENTINEL_VALUE
+
+    exit_code, stdout, stderr, _ = run_cli(config=fork_config)
+
+    assert exit_code == 2
+    assert SENTINEL_VALUE not in stdout + stderr
+
+
+@pytest.mark.parametrize("kept_display_type", ["inky", "mock", "epd7in3e"])
+def test_migration_keeps_a_supported_display_type_already_present(migration, fork_config, kept_display_type):
+    fork_config["display_type"] = kept_display_type
+
+    migrated = migration.migrate_device_config(fork_config, migration_options(migration))
+
+    assert migrated["display_type"] == kept_display_type
+
+
+def test_app_display_initialises_in_mock_mode_from_the_migrated_config(
+    migrate, fork_config, write_device_json, tmp_path, monkeypatch
+):
+    """Scope: Config + DisplayManager over the migrated config, nothing completed by the test.
+
+    The inkypi.py entry point is not imported: it parses the command line, reads the real device.json
+    and serves on a port at import time, none of which can be isolated without changing src/.
+    The working directory moves to tmp_path only so the mock display writes its default folder there.
+    """
+    monkeypatch.chdir(tmp_path)
+    migrated = migrate(fork_config, display_type="mock")
+    display_manager = DisplayManager(device_config_from(write_device_json, migrated))
+
+    display_manager.display_image(Image.new("RGB", (800, 480), (255, 255, 255)))
+
+    assert type(display_manager.display).__name__ == "MockDisplay"
+    assert (tmp_path / "mock_display_output" / "latest.png").exists()
+
+
+# --- the cycle position follows the removals ------------------------------------------------------
+
+
+def config_with_one_playlist(*instances, current_plugin_index):
+    return {
+        "playlist_config": {
+            "playlists": [
+                {
+                    "name": "Default",
+                    "start_time": "00:00",
+                    "end_time": "24:00",
+                    "plugins": list(instances),
+                    "current_plugin_index": current_plugin_index,
+                }
+            ],
+            "active_playlist": "Default",
+        }
+    }
+
+
+def instance_of_plugin(plugin_id, name, **settings):
+    return {"plugin_id": plugin_id, "name": name, "plugin_settings": settings, "refresh": {}, "latest_refresh_time": None}
+
+
+def name_of_next_instance(migrated):
+    return Playlist.from_dict(migrated["playlist_config"]["playlists"][0]).get_next_plugin().name
+
+
+@pytest.mark.parametrize(
+    "current_index, expected_next_name",
+    [(1, "B"), (2, "A"), (0, "A"), (None, "A"), (7, "B"), (-1, "A")],
+    ids=["A shown", "B shown", "removed shown", "no instance shown yet", "index past the end", "negative index"],
+)
+def test_migration_keeps_the_next_instance_of_the_cycle_when_the_first_one_is_removed(
+    migrate, current_index, expected_next_name
+):
+    config = config_with_one_playlist(
+        instance_of_plugin("icalendar", "Agenda"),
+        instance_of_plugin("weather", "A"),
+        instance_of_plugin("weather", "B"),
+        current_plugin_index=current_index,
+    )
+
+    migrated = migrate(config)
+
+    assert name_of_next_instance(migrated) == expected_next_name
+
+
+@pytest.mark.parametrize(
+    "current_index, expected_next_name", [(0, "B"), (1, "B"), (2, "A")], ids=["A shown", "removed shown", "B shown"]
+)
+def test_migration_keeps_the_next_instance_of_the_cycle_when_a_middle_one_is_removed(
+    migrate, current_index, expected_next_name
+):
+    config = config_with_one_playlist(
+        instance_of_plugin("weather", "A"),
+        instance_of_plugin("icalendar", "Agenda"),
+        instance_of_plugin("weather", "B"),
+        current_plugin_index=current_index,
+    )
+
+    migrated = migrate(config)
+
+    assert name_of_next_instance(migrated) == expected_next_name
+
+
+def test_migration_clears_the_cycle_position_of_a_playlist_left_without_instance(migrate):
+    config = config_with_one_playlist(instance_of_plugin("icalendar", "Agenda"), current_plugin_index=0)
+
+    migrated = migrate(config)
+
+    playlist = migrated["playlist_config"]["playlists"][0]
+    assert playlist["plugins"] == []
+    assert playlist["current_plugin_index"] is None
+
+
+# --- plugins absent from the inventory ------------------------------------------------------------
+
+
+def only_weather_in(tmp_path):
+    return make_plugins_dir(tmp_path / "only_weather", ["weather"])
+
+
+def test_cli_refuses_an_instance_of_a_plugin_absent_from_the_inventory(run_cli, tmp_path):
+    config = config_with_one_playlist(
+        instance_of_plugin("image_upload", "Agenda", **{SENTINEL_KEY: SENTINEL_VALUE}), current_plugin_index=None
+    )
+
+    exit_code, stdout, stderr, written = run_cli(config=config, plugins_dir=only_weather_in(tmp_path))
+
+    assert exit_code == 2
+    assert written is None
+    assert stderr.startswith("refused: ")
+    assert "image_upload" in stderr
+    assert "Agenda" not in stdout + stderr
+    for secret in (SENTINEL_KEY, SENTINEL_VALUE):
+        assert secret not in stdout + stderr
+
+
+def test_cli_refusal_of_an_absent_plugin_escapes_the_plugin_id(run_cli, tmp_path):
+    config = config_with_one_playlist(instance_of_plugin("evil\nplugin\x1b[31m", "Name"), current_plugin_index=None)
+
+    exit_code, _, stderr, _ = run_cli(config=config, plugins_dir=only_weather_in(tmp_path))
+
+    assert exit_code == 2
+    assert stderr.count("\n") == 1
+    assert stderr.isprintable() is False
+    assert all(line.isprintable() for line in stderr.splitlines())
+
+
+def test_cli_remove_plugin_id_extends_the_removable_plugins(run_cli, tmp_path):
+    plugins_dir = make_plugins_dir(tmp_path / "no_image_upload", ["weather", "clock", "calendar", "image_folder"])
+
+    exit_code, stdout, _, written = run_cli("--remove-plugin-id", "image_upload", plugins_dir=plugins_dir)
+
+    migrated = json.loads(written)
+    assert exit_code == 0
+    assert instances_of(migrated, "image_upload") == []
+    assert instances_of(migrated, "icalendar") == []
+    assert instances_of(migrated, "icloud_calendar") == []
+    assert "kept 5 / removed 3" in stdout
+
+
+def test_cli_reports_each_removed_instance_with_its_playlist_plugin_id_and_escaped_name(run_cli, fork_config):
+    hostile_instance = fork_config["playlist_config"]["playlists"][0]["plugins"][0]
+    hostile_instance["name"] = "evil\nname\x1b[31m"
+    fork_config["playlist_config"]["playlists"][1]["name"] = "Eve\rning"
+
+    exit_code, stdout, _, _ = run_cli(config=fork_config)
+
+    assert exit_code == 0
+    assert stdout.splitlines() == [
+        'removed instance: playlist="Default" plugin_id="icalendar" name="evil\\nname\\u001b[31m"',
+        'removed instance: playlist="Eve\\rning" plugin_id="icloud_calendar" name="Family"',
+        "kept 6 / removed 2",
+    ]
+
+
+def test_migration_reports_the_removed_instances_as_structured_records(migrate_with_report, fork_config):
+    result = migrate_with_report(fork_config)
+
+    removed = [(r.playlist_name, r.plugin_id, r.instance_name) for r in result.removed_instances]
+
+    assert removed == [("Default", "icalendar", "Agenda"), ("Evening", "icloud_calendar", "Family")]
+
+
+# --- an interval an instance already has ----------------------------------------------------------
+
+
+def test_migration_keeps_the_interval_a_scheduled_instance_already_has(migrate, fork_config):
+    instance_named(fork_config, "MeteoMatin")["refresh"] = {"scheduled": "07:30", "interval": 1234}
+
+    migrated = migrate(fork_config)
+
+    assert instance_named(migrated, "MeteoMatin")["refresh"] == {"scheduled": "07:30", "interval": 1234}
