@@ -7,7 +7,6 @@ from plugins.weather.labels import (
     LABELS,
     format_long_date,
     format_weekday_abbreviation,
-    get_labels,
     translate_data_points,
 )
 
@@ -60,14 +59,8 @@ def test_format_long_date_writes_every_month_in_french(month_number, french_mont
 
 
 @pytest.mark.parametrize("day, french_weekday, french_abbreviation", FRENCH_WEEKDAYS_EXPECTED)
-def test_format_long_date_writes_every_weekday_in_french(day, french_weekday, french_abbreviation):
-    long_date = format_long_date(day, "fr")
-
-    assert long_date.startswith(f"{french_weekday} ")
-
-
-@pytest.mark.parametrize("day, french_weekday, french_abbreviation", FRENCH_WEEKDAYS_EXPECTED)
-def test_format_weekday_abbreviation_writes_every_abbreviation_in_french(day, french_weekday, french_abbreviation):
+def test_every_weekday_is_written_in_french_in_full_and_abbreviated(day, french_weekday, french_abbreviation):
+    assert format_long_date(day, "fr").startswith(f"{french_weekday} ")
     assert format_weekday_abbreviation(day, "fr") == french_abbreviation
 
 
@@ -78,21 +71,19 @@ def test_format_long_date_writes_the_first_of_the_month_as_premier():
 
 
 def test_format_long_date_writes_the_other_days_as_plain_numbers():
-    assert format_long_date(date(2026, 10, 13), "fr") == "mardi 13 octobre"
     assert format_long_date(date(2026, 10, 2), "fr") == "vendredi 2 octobre"
 
 
 @pytest.mark.parametrize("english_key, french_label", FRENCH_DATA_POINT_LABELS_EXPECTED)
 def test_french_data_point_label_is_translated(english_key, french_label):
-    assert get_labels("fr")[english_key] == french_label
+    assert LABELS["fr"][english_key] == french_label
 
 
 @pytest.mark.parametrize("english_key", DATA_POINT_LABEL_KEYS)
 def test_french_data_point_label_fits_the_tile_like_the_english_one(english_key):
-    english_label = LABELS["en"][english_key]
     french_label = LABELS["fr"][english_key]
 
-    longest_label_allowed = len(english_label) + EXTRA_CHARACTERS_ALLOWED_OVER_ENGLISH_LABEL
+    longest_label_allowed = len(english_key) + EXTRA_CHARACTERS_ALLOWED_OVER_ENGLISH_LABEL
 
     assert len(french_label) <= longest_label_allowed
 

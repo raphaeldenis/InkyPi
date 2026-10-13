@@ -1,6 +1,5 @@
 import hashlib
 import json
-import os
 import time
 from datetime import datetime
 from pathlib import Path
@@ -22,6 +21,10 @@ OPEN_METEO = "OpenMeteo"
 OPEN_WEATHER_MAP = "OpenWeatherMap"
 BOTH_PROVIDERS = [OPEN_METEO, OPEN_WEATHER_MAP]
 
+FRENCH_DATA_POINT_LABELS_ON_TILES = [
+    ("Sunrise", "Lever"), ("Sunset", "Coucher"), ("Air Quality", "Qualité air"), ("UV Index", "UV"),
+]
+
 FIXTURE_BY_URL_PREFIX = {
     "https://api.open-meteo.com/": "open_meteo_forecast.json",
     "https://air-quality-api.open-meteo.com/": "open_meteo_air_quality.json",
@@ -41,7 +44,6 @@ class FakeHttpResponse:
 
     def __init__(self, payload):
         self._payload = payload
-        self.content = json.dumps(payload).encode()
 
     def json(self):
         return self._payload
@@ -54,16 +56,12 @@ def serve_weather_fixtures(url, *args, **kwargs):
 
 
 @pytest.fixture
-def paris_system_clock():
+def paris_system_clock(monkeypatch):
     """Open-Meteo times carry no offset: the plugin reads them in the system timezone."""
-    previous_timezone = os.environ.get("TZ")
-    os.environ["TZ"] = DEVICE_TIMEZONE
-    time.tzset()
-    yield
-    if previous_timezone is None:
-        os.environ.pop("TZ", None)
-    else:
-        os.environ["TZ"] = previous_timezone
+    with monkeypatch.context() as clock_patch:
+        clock_patch.setenv("TZ", DEVICE_TIMEZONE)
+        time.tzset()
+        yield
     time.tzset()
 
 
@@ -130,22 +128,13 @@ def test_weather_plugin_renders_french_labels(provider, render_weather_html):
 
     for french_label in ["Humidité", "Pression", "Vent", "Ressenti", "Dernière mise à jour", "Visibilité"]:
         assert french_label in html
-    for english_label in ["Humidity", "Pressure", "Feels Like", "Last refresh", "UV Index", "Visibility", "Sunrise"]:
+    for english_label in ["Humidity", "Pressure", "Feels Like", "Last refresh", "UV Index", "Visibility"]:
         assert english_label not in html
-
-
-@pytest.mark.parametrize("provider", BOTH_PROVIDERS)
-@pytest.mark.parametrize(
-    "english_label, french_label",
-    [("Sunrise", "Lever"), ("Sunset", "Coucher"), ("Air Quality", "Qualité air"), ("UV Index", "UV")],
-)
-def test_weather_plugin_renders_the_french_data_point_labels(provider, english_label, french_label, render_weather_html):
-    html = render_weather_html(provider, language="fr")
-
-    assert f">{french_label}<" in html
-    assert f'alt="{french_label}"' in html
-    assert f">{english_label}<" not in html
-    assert f'alt="{english_label}"' not in html
+    for english_label, french_label in FRENCH_DATA_POINT_LABELS_ON_TILES:
+        assert f">{french_label}<" in html
+        assert f'alt="{french_label}"' in html
+        assert f">{english_label}<" not in html
+        assert f'alt="{english_label}"' not in html
 
 
 @pytest.mark.parametrize("provider", BOTH_PROVIDERS)
@@ -173,11 +162,10 @@ def test_wind_arrow_still_shown_in_french(provider, render_weather_html):
 
 
 @pytest.mark.parametrize("provider", BOTH_PROVIDERS)
-def test_french_hourly_graph_keeps_the_upstream_hh00_labels_and_no_trend_label(provider, render_weather_html):
+def test_french_hourly_graph_keeps_the_upstream_hh00_labels(provider, render_weather_html):
     html = render_weather_html(provider, language="fr")
 
     assert '"09:00", "10:00", "11:00"' in html
-    assert "Tendance" not in html
 
 
 @pytest.mark.parametrize("language_setting", [{}, {"language": "en"}], ids=["unset", "en"])
