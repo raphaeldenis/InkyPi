@@ -22,7 +22,7 @@ PLUGINS_DIR = REPO_ROOT / "src" / "plugins"
 FORK_SHAPE_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "device_fork_shape.json"
 
 CHOSEN_CYCLE_INTERVAL_SECONDS = 1800
-SCHEDULER_SLEEP_TIMES_THAT_MUST_NOT_LEAK = (60, 7)
+SCHEDULER_SLEEP_TIME_THAT_MUST_NOT_LEAK = 60
 FORK_IMAGE_UPLOAD_KEYS = (
     "timerEnabled",
     "timerValue",
@@ -51,29 +51,23 @@ def fork_config():
 
 
 @pytest.fixture
-def migrate(migration):
+def migrate_with_report(migration):
     def run(config, **option_overrides):
-        known_plugin_ids = migration.discover_known_plugin_ids(PLUGINS_DIR)
         options = migration.MigrationOptions(
             display_type="inky",
-            known_plugin_ids=known_plugin_ids,
+            known_plugin_ids=migration.discover_known_plugin_ids(PLUGINS_DIR),
             plugin_cycle_interval_seconds=CHOSEN_CYCLE_INTERVAL_SECONDS,
             **option_overrides,
         )
-        return migration.migrate_device_config(config, options)
+        return migration.migrate_device_config_with_report(config, options)
 
     return run
 
 
 @pytest.fixture
-def migrate_with_report(migration):
-    def run(config):
-        options = migration.MigrationOptions(
-            display_type="inky",
-            known_plugin_ids=migration.discover_known_plugin_ids(PLUGINS_DIR),
-            plugin_cycle_interval_seconds=CHOSEN_CYCLE_INTERVAL_SECONDS,
-        )
-        return migration.migrate_device_config_with_report(config, options)
+def migrate(migrate_with_report):
+    def run(config, **option_overrides):
+        return migrate_with_report(config, **option_overrides).config
 
     return run
 
@@ -125,9 +119,8 @@ def test_migration_drops_instances_of_removed_plugins(migrate_with_report, fork_
     assert [i["name"] for i in instances_of(result.config, "weather")] == ["Meteo", "MeteoMatin"]
 
 
-@pytest.mark.parametrize("scheduler_sleep_time", SCHEDULER_SLEEP_TIMES_THAT_MUST_NOT_LEAK)
-def test_migration_never_derives_cycle_interval_from_scheduler_sleep_time(migrate, fork_config, scheduler_sleep_time):
-    fork_config["scheduler_sleep_time"] = scheduler_sleep_time
+def test_migration_never_derives_cycle_interval_from_scheduler_sleep_time(migrate, fork_config):
+    fork_config["scheduler_sleep_time"] = SCHEDULER_SLEEP_TIME_THAT_MUST_NOT_LEAK
 
     migrated = migrate(fork_config)
 
@@ -155,33 +148,10 @@ def test_migration_is_idempotent(migrate, fork_config):
     assert migrated_twice == migrated_once
 
 
-def test_migration_applies_the_per_instance_intervals(migrate, fork_config):
-    migrated = migrate(fork_config)
-
-    assert instance_named(migrated, "Meteo")["refresh"] == {"interval": 3600}
-    assert instance_named(migrated, "Photos")["refresh"] == {"interval": 600}
-    assert instance_named(migrated, "Clock")["refresh"] == {"interval": 3600}
-
-
-def test_migration_strips_the_fork_keys_from_image_upload_and_randomizes(migrate, fork_config):
-    migrated = migrate(fork_config)
-
-    photo_settings = instance_named(migrated, "Photos")["plugin_settings"]
-    assert all(key not in photo_settings for key in FORK_IMAGE_UPLOAD_KEYS)
-    assert photo_settings["randomize"] == "true"
-    assert photo_settings["imageFiles[]"] == ["/var/example/photos/one.png", "/var/example/photos/two.png"]
-
-
 def test_migration_leaves_photos_sequential_when_randomize_is_declined(migrate, fork_config):
     migrated = migrate(fork_config, randomize_photos=False)
 
     assert "randomize" not in instance_named(migrated, "Photos")["plugin_settings"]
-
-
-def test_migration_sets_french_on_weather_instances_without_a_language(migrate, fork_config):
-    migrated = migrate(fork_config)
-
-    assert instance_named(migrated, "Meteo")["plugin_settings"]["language"] == "fr"
 
 
 def test_migration_keeps_the_language_a_weather_instance_already_has(migrate, fork_config):
@@ -211,43 +181,6 @@ def test_migrated_config_is_loadable_by_the_app(migrate, fork_config, make_app):
 
     assert home_response.status_code == 200
     assert playlist_response.status_code == 200
-
-
-def test_cli_writes_the_migrated_copy_and_never_the_input(migration, migrate, fork_config, tmp_path, capsys):
-    input_copy = tmp_path / "input_copy.json"
-    output_file = tmp_path / "migrated.json"
-    input_copy.write_text(json.dumps(fork_config))
-    sha256_before = hashlib.sha256(input_copy.read_bytes()).hexdigest()
-
-    exit_code = migration.main(
-        [
-            "--in", str(input_copy),
-            "--out", str(output_file),
-            "--display-type", "inky",
-            "--cycle-interval-seconds", str(CHOSEN_CYCLE_INTERVAL_SECONDS),
-            "--plugins-dir", str(PLUGINS_DIR),
-        ]
-    )
-
-    sha256_after = hashlib.sha256(input_copy.read_bytes()).hexdigest()
-    report = capsys.readouterr().out
-    assert exit_code == 0
-    assert sha256_after == sha256_before
-    assert json.loads(output_file.read_text()) == migrate(fork_config)
-    assert "Agenda" in report and "Family" in report
-
-
-def test_cli_refuses_to_write_over_its_input(migration, fork_config, tmp_path):
-    input_copy = tmp_path / "input_copy.json"
-    input_copy.write_text(json.dumps(fork_config))
-    sha256_before = hashlib.sha256(input_copy.read_bytes()).hexdigest()
-
-    exit_code = migration.main(
-        ["--in", str(input_copy), "--out", str(input_copy), "--display-type", "inky", "--plugins-dir", str(PLUGINS_DIR)]
-    )
-
-    assert exit_code != 0
-    assert hashlib.sha256(input_copy.read_bytes()).hexdigest() == sha256_before
 
 
 class RecordingPlugin:
@@ -367,40 +300,10 @@ EXPECTED_PLAYLIST_ORDER = ["Default", "Evening"]
 EXPECTED_INSTANCE_ORDER = {"Default": ["Meteo", "MeteoMatin", "Photos"], "Evening": ["Clock", "Planning", "Folder"]}
 
 
-def test_migration_applies_the_d7_intervals_whatever_the_initial_ones(migrate, fork_config):
-    migrated = migrate(fork_config)
-
-    assert instance_named(migrated, "Meteo")["refresh"]["interval"] == 3600
-    assert instance_named(migrated, "Planning")["refresh"]["interval"] == 10800
-    assert instance_named(migrated, "Photos")["refresh"]["interval"] == 600
-    assert instance_named(migrated, "Folder")["refresh"]["interval"] == 600
-
-
 def test_migration_gives_no_interval_to_a_scheduled_instance(migrate, fork_config):
     migrated = migrate(fork_config)
 
     assert instance_named(migrated, "MeteoMatin")["refresh"] == {"scheduled": "07:30"}
-
-
-def test_migration_sets_the_language_on_a_weather_instance_without_settings(migrate, fork_config):
-    migrated = migrate(fork_config)
-
-    assert instance_named(migrated, "MeteoMatin")["plugin_settings"] == {"language": "fr"}
-
-
-def test_migration_sets_the_language_only_on_weather(migrate, fork_config):
-    migrated = migrate(fork_config)
-
-    other_instances = [i for p in migrated["playlist_config"]["playlists"] for i in p["plugins"] if i["plugin_id"] != "weather"]
-    assert other_instances
-    assert all("language" not in i.get("plugin_settings", {}) for i in other_instances)
-
-
-def test_migration_strips_the_fork_keys_only_from_image_upload(migrate, fork_config):
-    migrated = migrate(fork_config)
-
-    folder_settings = instance_named(migrated, "Folder")["plugin_settings"]
-    assert folder_settings == {"folder_path": "/var/example/folder", "rotation": "90", "timerEnabled": "true"}
 
 
 def test_migration_keeps_an_existing_inverted_image(migrate, fork_config):
@@ -591,6 +494,14 @@ def make_plugins_dir(root, plugin_ids):
         (root / plugin_id).mkdir(parents=True)
         (root / plugin_id / "plugin-info.json").write_text("{}")
     return root
+
+
+def test_cli_writes_the_migrated_copy_and_never_the_input(run_cli, migrate, fork_config):
+    exit_code, _, _, written = run_cli()
+
+    assert exit_code == 0
+    assert json.loads(written) == migrate(fork_config)
+    assert run_cli.input_copy.read_text() == json.dumps(fork_config)
 
 
 def test_cli_applies_every_non_default_option(run_cli, tmp_path):

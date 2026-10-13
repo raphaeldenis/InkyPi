@@ -1,18 +1,6 @@
 """Migrates a fork-shaped device.json copy to the upstream schema.
 
-Usage:
-  migrate_device_config.py --in <copy> --out <file> --display-type <type>
-                           [--cycle-interval-seconds <1..86400>]
-                           [--plugins-dir <upstream src/plugins>] [--no-randomize]
-
---in                      copy of the device.json to read; it is only read.
---out                     file to write; it must be a different file than --in and is replaced atomically.
---display-type            inky, mock, or a Waveshare model such as epd7in3e.
---cycle-interval-seconds  playlist cycle interval, 1800 by default.
---plugins-dir             upstream plugins folder; instances of plugins without a plugin-info.json there are removed.
---no-randomize            leaves image_upload instances sequential.
-
-The report lists the names of the removed instances and the kept / removed counts, never any setting.
+Reads --in, writes a different --out atomically, and reports the removed instance names, never a setting.
 Exit codes: 0 migrated, 2 refused (the message names the problem, never the config content).
 """
 import argparse
@@ -22,14 +10,14 @@ import json
 import os
 import sys
 import tempfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping, Optional, Sequence
+from typing import Optional, Sequence
 
 DEFAULT_CYCLE_INTERVAL_SECONDS = 1800
 MIN_CYCLE_INTERVAL_SECONDS = 1
 MAX_CYCLE_INTERVAL_SECONDS = 86400
-DEFAULT_INSTANCE_INTERVALS_SECONDS = {
+INSTANCE_INTERVALS_SECONDS = {
     "weather": 3600,
     "calendar": 10800,
     "image_upload": 600,
@@ -46,6 +34,7 @@ FORK_IMAGE_UPLOAD_KEYS = (
     "centerX",
     "centerY",
 )
+WEATHER_LANGUAGE = "fr"
 FIXED_DISPLAY_TYPES = ("inky", "mock")
 WAVESHARE_DISPLAY_TYPE_PATTERN = "epd*in*"
 UNNAMED_INSTANCE = "(unnamed)"
@@ -61,9 +50,7 @@ class MigrationOptions:
     display_type: str
     known_plugin_ids: frozenset
     plugin_cycle_interval_seconds: int = DEFAULT_CYCLE_INTERVAL_SECONDS
-    instance_intervals_seconds: Mapping[str, int] = field(default_factory=lambda: dict(DEFAULT_INSTANCE_INTERVALS_SECONDS))
     randomize_photos: bool = True
-    weather_language: str = "fr"
 
 
 @dataclass(frozen=True)
@@ -173,15 +160,15 @@ def migrate_instance(instance: dict, options: MigrationOptions, location: str) -
             require_object(instance[object_key], f"{location}.{object_key}")
 
     plugin_id = instance["plugin_id"]
-    apply_refresh_interval(instance, plugin_id, options)
+    apply_refresh_interval(instance, plugin_id)
     if plugin_id == "weather":
-        apply_weather_rules(instance, options)
+        apply_weather_rules(instance)
     if plugin_id == "image_upload":
         apply_image_upload_rules(instance, options)
 
 
-def apply_refresh_interval(instance: dict, plugin_id: str, options: MigrationOptions) -> None:
-    interval_seconds = options.instance_intervals_seconds.get(plugin_id)
+def apply_refresh_interval(instance: dict, plugin_id: str) -> None:
+    interval_seconds = INSTANCE_INTERVALS_SECONDS.get(plugin_id)
     refresh = instance.get("refresh", {})
     is_scheduled_at_a_time_of_day = "scheduled" in refresh
     if interval_seconds is None or is_scheduled_at_a_time_of_day:
@@ -189,8 +176,8 @@ def apply_refresh_interval(instance: dict, plugin_id: str, options: MigrationOpt
     instance["refresh"] = {**refresh, "interval": interval_seconds}
 
 
-def apply_weather_rules(instance: dict, options: MigrationOptions) -> None:
-    instance.setdefault("plugin_settings", {}).setdefault("language", options.weather_language)
+def apply_weather_rules(instance: dict) -> None:
+    instance.setdefault("plugin_settings", {}).setdefault("language", WEATHER_LANGUAGE)
 
 
 def apply_image_upload_rules(instance: dict, options: MigrationOptions) -> None:
@@ -205,9 +192,19 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--in", dest="input_path", required=True, type=Path, help="copy of the device.json to read")
     parser.add_argument("--out", dest="output_path", required=True, type=Path, help="file to write, never the input")
-    parser.add_argument("--display-type", required=True, help="display type for this device, e.g. inky")
-    parser.add_argument("--cycle-interval-seconds", type=int, default=DEFAULT_CYCLE_INTERVAL_SECONDS)
-    parser.add_argument("--plugins-dir", type=Path, default=DEFAULT_PLUGINS_DIR)
+    parser.add_argument("--display-type", required=True, help="inky, mock, or a Waveshare model such as epd7in3e")
+    parser.add_argument(
+        "--cycle-interval-seconds",
+        type=int,
+        default=DEFAULT_CYCLE_INTERVAL_SECONDS,
+        help=f"playlist cycle interval, {MIN_CYCLE_INTERVAL_SECONDS} to {MAX_CYCLE_INTERVAL_SECONDS} (default %(default)s)",
+    )
+    parser.add_argument(
+        "--plugins-dir",
+        type=Path,
+        default=DEFAULT_PLUGINS_DIR,
+        help="upstream src/plugins folder; instances of plugins without a plugin-info.json there are removed",
+    )
     parser.add_argument("--no-randomize", action="store_true", help="leave photo instances sequential")
     return parser
 
