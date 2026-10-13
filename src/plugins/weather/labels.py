@@ -38,7 +38,8 @@ FRENCH_MONTHS = [
 
 def resolve_language(requested_language):
     """Returns the requested language when it is supported, the default language otherwise."""
-    return requested_language if requested_language in LABELS else DEFAULT_LANGUAGE
+    is_supported = isinstance(requested_language, str) and requested_language in LABELS
+    return requested_language if is_supported else DEFAULT_LANGUAGE
 
 
 def format_long_date(moment, language):

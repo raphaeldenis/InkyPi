@@ -186,6 +186,27 @@ def test_weather_falls_back_to_english_for_an_unsupported_language(provider, ren
     assert "Luftfeuchtigkeit" not in html
 
 
+MALFORMED_LANGUAGE_SETTINGS = [
+    pytest.param(None, id="none"),
+    pytest.param([], id="empty-list"),
+    pytest.param({}, id="empty-object"),
+    pytest.param(42, id="integer"),
+    pytest.param("klingon", id="unknown-string"),
+    pytest.param("x" * 10_000, id="10000-characters"),
+    pytest.param("<script>alert(1)</script><b>fr</b>", id="html-and-script"),
+]
+
+
+@pytest.mark.parametrize("provider", BOTH_PROVIDERS)
+@pytest.mark.parametrize("malformed_language", MALFORMED_LANGUAGE_SETTINGS)
+def test_weather_renders_english_for_a_malformed_language_setting(provider, malformed_language, render_weather_html):
+    reference_hashes = json.loads(ENGLISH_REFERENCE_HASHES.read_text())
+
+    html = render_weather_html(provider, language=malformed_language)
+
+    assert fingerprint_of(html) == reference_hashes[provider]
+
+
 def test_weather_settings_page_offers_the_language_choice(make_app):
     app = make_app()
     load_plugins(app.config["DEVICE_CONFIG"].get_plugins())
