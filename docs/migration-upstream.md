@@ -16,7 +16,7 @@ Le script `scripts/migrate_device_config.py` lit une **copie** du `device.json` 
 
 | Règle | Effet |
 |---|---|
-| `display_type` | ajouté avec la valeur passée à `--display-type` (obligatoire) ; une valeur déjà présente est conservée. Valeurs valides : `inky`, `mock`, ou un modèle Waveshare de la forme `epd…in…` |
+| `display_type` | ajouté avec la valeur passée à `--display-type` (obligatoire) ; une valeur déjà présente est conservée |
 | `inverted_image` | ajouté à `false` s'il manque ; une valeur existante est conservée |
 | `plugin_cycle_interval_seconds` | posé à la valeur de `--cycle-interval-seconds` (1800 par défaut, entier de 1 à 86400), jamais déduit de `scheduler_sleep_time` |
 | Intervalles par instance | météo 3600 s, calendrier 10800 s, `image_upload` et `image_folder` 600 s ; une instance qui a une heure `scheduled` ne reçoit pas d'intervalle et garde son `refresh` tel quel (upstream cumule les deux déclencheurs) |
@@ -26,7 +26,7 @@ Le script `scripts/migrate_device_config.py` lit une **copie** du `device.json` 
 | `plugin_order` | laissé absent (ordre par défaut d'upstream) |
 | Calendrier | aucune instance `calendar` n'est créée : le lien est saisi à la main (étape 6) |
 
-Le script refuse de travailler (code de sortie 2, message sans aucun contenu de configuration) quand `--plugins-dir` est absent ou ne contient aucun `plugin-info.json` (toutes les instances seraient retirées), quand `--out` désigne le même fichier que `--in` (lien physique compris), quand `display_type` ou l'intervalle sont invalides, ou quand le JSON n'a pas la forme attendue. À la fin, il affiche les noms des instances retirées puis `kept N / removed M`, jamais un réglage.
+Le script refuse de travailler avec le code de sortie 2 et un message sans aucun contenu de configuration ; `--help` détaille les options et les refus. À la fin, il affiche les noms des instances retirées puis `kept N / removed M`, jamais un réglage.
 
 Le script est idempotent : le relancer sur sa propre sortie ne change rien.
 
@@ -65,12 +65,4 @@ La fenêtre de coupure va de l'étape 2 à la fin de l'étape 5 : `install/updat
 
 ## Fenêtre de coupure
 
-L'écran n'est plus rafraîchi entre l'étape 2 et le redémarrage de l'étape 5. Prévoir une durée de l'ordre de la demi-heure, dominée par `update.sh` (apt et pip sur un Pi Zero 2 W). `device.json` est réécrit par l'application à chaque rafraîchissement, sans écriture atomique : une coupure de courant pendant les étapes 3 à 5 sans la sauvegarde de l'étape 3 fait perdre la configuration.
-
-## Essayer le script sur une copie
-
-Le script s'essaie sur n'importe quelle copie jetable, sans toucher au Pi :
-
-`python3 scripts/migrate_device_config.py --in <copie>.json --out <migré>.json --display-type inky`
-
-Les tests de `tests/test_migrate_device_config.py` couvrent ces règles, les refus, l'idempotence, le chargement de la sortie par l'application, l'absence d'écriture sur l'entrée et l'absence de tout réglage dans la sortie standard.
+L'écran n'est plus rafraîchi pendant cette fenêtre. Prévoir une durée de l'ordre de la demi-heure, dominée par `update.sh` (apt et pip sur un Pi Zero 2 W). `device.json` est réécrit par l'application à chaque rafraîchissement, sans écriture atomique : une coupure de courant pendant les étapes 3 à 5 sans la sauvegarde de l'étape 3 fait perdre la configuration.
