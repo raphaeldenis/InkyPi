@@ -75,6 +75,7 @@ class Calendar(BasePlugin):
 
         for calendar_url, color in zip(calendar_urls, colors):
             cal = self.fetch_calendar(calendar_url)
+            self.drop_events_without_start(cal)
             events = recurring_ical_events.of(cal).between(start_range, end_range)
             contrast_color = self.get_contrast_color(color)
 
@@ -94,6 +95,16 @@ class Calendar(BasePlugin):
 
         return parsed_events
     
+    def drop_events_without_start(self, cal):
+        """Removes the events that have no DTSTART, which the recurrence expansion cannot handle."""
+        events_without_start = [
+            component for component in cal.subcomponents
+            if component.name == "VEVENT" and "dtstart" not in component
+        ]
+        for event in events_without_start:
+            logger.warning("skipping event without start")
+            cal.subcomponents.remove(event)
+
     def get_view_range(self, view, current_dt, settings):
         start = datetime(current_dt.year, current_dt.month, current_dt.day)
         if view == "timeGridDay":
@@ -146,7 +157,7 @@ class Calendar(BasePlugin):
             response.raise_for_status()
             return icalendar.Calendar.from_ical(response.text)
         except Exception as e:
-            raise RuntimeError(f"Failed to fetch iCalendar url: {str(e)}")
+            raise RuntimeError(f"Failed to fetch iCalendar url: {type(e).__name__}") from None
 
     def get_contrast_color(self, color):
         """
