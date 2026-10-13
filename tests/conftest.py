@@ -31,6 +31,21 @@ def isolate_tests_from_dotenv_and_environment(monkeypatch):
     monkeypatch.delenv("CALENDAR_URL", raising=False)
 
 
+@pytest.fixture(autouse=True)
+def keep_calendar_screenshot_out_of_the_checkout(monkeypatch, tmp_path):
+    """Redirects src/calendar_temp.png to tmp_path; every other resolved path stays untouched."""
+    from plugins.icalendar import icalendar as icalendar_module
+
+    real_resolve_path = icalendar_module.resolve_path
+
+    def resolve_path_with_tmp_screenshot(file_path):
+        if file_path == "calendar_temp.png":
+            return str(tmp_path / file_path)
+        return real_resolve_path(file_path)
+
+    monkeypatch.setattr(icalendar_module, "resolve_path", resolve_path_with_tmp_screenshot)
+
+
 class FakeDeviceConfig:
     """Device config double whose environment comes from an injected dict."""
 

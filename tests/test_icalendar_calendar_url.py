@@ -102,6 +102,29 @@ def test_calendar_url_never_appears_in_logs_on_network_failure(
     assert "calendar.example.test" not in caplog.text
 
 
+@pytest.mark.parametrize(
+    ("configured_url", "requested_url"),
+    [
+        pytest.param(
+            "webcal://calendar.example.test/ical/SECRETTOKEN123.ics",
+            "https://calendar.example.test/ical/SECRETTOKEN123.ics",
+            id="webcal_is_fetched_over_https",
+        ),
+        pytest.param(CALENDAR_URL, CALENDAR_URL, id="https_is_left_unchanged"),
+    ],
+)
+def test_calendar_fetches_the_configured_url_over_https(
+    make_device_config, calendar_network, fake_chromium, frozen_clock, dentiste_ics_bytes,
+    configured_url, requested_url,
+):
+    calendar_network.serve_ics(dentiste_ics_bytes)
+    device_config = make_device_config(environment={"CALENDAR_URL": configured_url})
+
+    render_calendar(device_config, WEEK_VIEW_SETTINGS)
+
+    assert calendar_network.requested_urls == [requested_url]
+
+
 def test_calendar_html_matches_reference_for_dentiste_in_landscape(
     make_device_config, calendar_network, fake_chromium, frozen_clock, dentiste_ics_bytes
 ):
