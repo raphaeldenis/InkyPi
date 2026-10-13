@@ -79,7 +79,7 @@ def info_logs(caplog):
     return caplog
 
 
-def test_refresh_cycle_survives_a_missing_chromium_and_leaves_the_screen_untouched(
+def test_refresh_cycle_logs_the_failure_and_keeps_running_when_no_browser_is_installed(
     no_chromium_binary, info_logs, started_refresh_task, screen_output_dir, tmp_path
 ):
     failure_was_logged = wait_until(lambda: "Exception during refresh" in info_logs.text)
