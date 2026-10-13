@@ -41,13 +41,28 @@ class RecordingCalendarServer:
         self._server.server_close()
 
 
-def test_suite_makes_no_network_call_when_calendar_url_is_exported_in_the_shell():
+def mirror_repo_with_a_dotenv_pointing_at(calendar_url, mirror_root):
+    """Symlinks src, tests and install into mirror_root so Config finds mirror_root/.env like a real checkout."""
+    mirror_root.mkdir()
+    for folder_name in ("src", "tests", "install"):
+        (mirror_root / folder_name).symlink_to(REPO_ROOT / folder_name)
+    (mirror_root / "pytest.ini").write_text((REPO_ROOT / "pytest.ini").read_text())
+    (mirror_root / ".env").write_text(f"CALENDAR_URL={calendar_url}\n")
+
+
+def test_suite_makes_no_network_call_when_calendar_url_is_in_the_shell_and_in_a_dotenv(tmp_path):
     server = RecordingCalendarServer()
-    shell_environment = {**os.environ, "CALENDAR_URL": server.url}
+    mirror_root = tmp_path / "checkout"
+    mirror_repo_with_a_dotenv_pointing_at(server.url, mirror_root)
+    shell_environment = {
+        **os.environ,
+        "CALENDAR_URL": server.url,
+        "PYTHONDONTWRITEBYTECODE": "1",
+    }
 
     completed = subprocess.run(
         [sys.executable, "-m", "pytest", TEST_THAT_SAVES_SETTINGS, "-q", "-p", "no:cacheprovider"],
-        cwd=REPO_ROOT,
+        cwd=mirror_root,
         env=shell_environment,
         capture_output=True,
         check=False,

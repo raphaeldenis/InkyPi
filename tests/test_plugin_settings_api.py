@@ -25,7 +25,7 @@ def refresh_icalendar_instance_like_the_scheduler(device_config):
     device_config.write_config()
 
 
-def test_user_saves_calendar_settings_without_url_being_persisted(make_app, fake_chromium, calendar_network):
+def test_user_saves_calendar_settings_without_url_being_persisted(make_app, fake_chromium):
     app = make_app(device_json_with_icalendar_instance())
     device_config = app.config["DEVICE_CONFIG"]
     forged_form = {
