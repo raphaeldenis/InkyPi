@@ -376,10 +376,10 @@ def test_migration_applies_the_d7_intervals_whatever_the_initial_ones(migrate, f
     assert instance_named(migrated, "Folder")["refresh"]["interval"] == 600
 
 
-def test_migration_keeps_the_scheduled_time_of_a_refresh(migrate, fork_config):
+def test_migration_gives_no_interval_to_a_scheduled_instance(migrate, fork_config):
     migrated = migrate(fork_config)
 
-    assert instance_named(migrated, "MeteoMatin")["refresh"] == {"scheduled": "07:30", "interval": 3600}
+    assert instance_named(migrated, "MeteoMatin")["refresh"] == {"scheduled": "07:30"}
 
 
 def test_migration_sets_the_language_on_a_weather_instance_without_settings(migrate, fork_config):
@@ -465,7 +465,6 @@ def test_migration_changes_only_what_it_is_meant_to_change(migrate, fork_config)
         instance_path("Evening", "Family"): ("removed", before["playlist_config"]["playlists"]["Evening"]["plugins"]["Family"]),
         instance_path("Default", "Meteo", "refresh", "interval"): ("changed", 1234, 3600),
         instance_path("Default", "Meteo", "plugin_settings", "language"): ("added", "fr"),
-        instance_path("Default", "MeteoMatin", "refresh", "interval"): ("added", 3600),
         instance_path("Default", "MeteoMatin", "plugin_settings"): ("added", {"language": "fr"}),
         instance_path("Default", "Photos", "refresh", "interval"): ("changed", 3600, 600),
         instance_path("Default", "Photos", "plugin_settings", "randomize"): ("added", "true"),

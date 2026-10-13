@@ -19,7 +19,7 @@ Le script `scripts/migrate_device_config.py` lit une **copie** du `device.json` 
 | `display_type` | ajouté avec la valeur passée à `--display-type` (obligatoire) ; une valeur déjà présente est conservée. Valeurs valides : `inky`, `mock`, ou un modèle Waveshare de la forme `epd…in…` |
 | `inverted_image` | ajouté à `false` s'il manque ; une valeur existante est conservée |
 | `plugin_cycle_interval_seconds` | posé à la valeur de `--cycle-interval-seconds` (1800 par défaut, entier de 1 à 86400), jamais déduit de `scheduler_sleep_time` |
-| Intervalles par instance | météo 3600 s, calendrier 10800 s, `image_upload` et `image_folder` 600 s ; une heure `scheduled` existante est conservée |
+| Intervalles par instance | météo 3600 s, calendrier 10800 s, `image_upload` et `image_folder` 600 s ; une instance qui a une heure `scheduled` ne reçoit pas d'intervalle et garde son `refresh` tel quel (upstream cumule les deux déclencheurs) |
 | Instances de plugins retirés | toute instance dont le plugin n'a pas de `plugin-info.json` dans `--plugins-dir` (`icalendar`, `icloud_calendar`) est supprimée de sa playlist |
 | `image_upload` | les clés du fork (minuterie, portrait, zoom, rotation, qualité, point focal) sont retirées ; `randomize` passe à `"true"` (sauf avec `--no-randomize`) |
 | `weather` | `language` passe à `fr` quand la clé manque, uniquement sur la météo |
