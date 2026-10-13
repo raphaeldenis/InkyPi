@@ -1,7 +1,10 @@
 {
     "name": "InkyPi",
     "orientation": "horizontal",
-    "resolution": [800, 480],
+    "resolution": [
+        800,
+        480
+    ],
     "timezone": "Europe/Paris",
     "scheduler_sleep_time": 60,
     "plugin_cycle_interval_seconds": 3600,
@@ -37,7 +40,15 @@
                             "units": "metric"
                         },
                         "refresh": {
-                            "interval": 3600
+                            "interval": 1234
+                        },
+                        "latest_refresh_time": "2026-10-14T08:00:00+00:00"
+                    },
+                    {
+                        "plugin_id": "weather",
+                        "name": "MeteoMatin",
+                        "refresh": {
+                            "scheduled": "07:30"
                         },
                         "latest_refresh_time": null
                     },
@@ -66,7 +77,7 @@
                         "latest_refresh_time": null
                     }
                 ],
-                "current_plugin_index": null
+                "current_plugin_index": 1
             },
             {
                 "name": "Evening",
@@ -92,6 +103,28 @@
                             "interval": 3600
                         },
                         "latest_refresh_time": null
+                    },
+                    {
+                        "plugin_id": "calendar",
+                        "name": "Planning",
+                        "plugin_settings": {},
+                        "refresh": {
+                            "interval": 1234
+                        },
+                        "latest_refresh_time": null
+                    },
+                    {
+                        "plugin_id": "image_folder",
+                        "name": "Folder",
+                        "plugin_settings": {
+                            "folder_path": "/var/example/folder",
+                            "rotation": "90",
+                            "timerEnabled": "true"
+                        },
+                        "refresh": {
+                            "interval": 1234
+                        },
+                        "latest_refresh_time": null
                     }
                 ],
                 "current_plugin_index": null
@@ -99,5 +132,12 @@
         ],
         "active_playlist": "Default"
     },
-    "refresh_info": {}
+    "refresh_info": {
+        "refresh_time": "2026-10-14T08:00:00+00:00",
+        "image_hash": "0123abcd",
+        "refresh_type": "Playlist",
+        "plugin_id": "weather",
+        "playlist": "Default",
+        "plugin_instance": "Meteo"
+    }
 }
