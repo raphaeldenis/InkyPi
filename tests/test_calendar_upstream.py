@@ -1,12 +1,17 @@
+import configparser
+import json
 import logging
 import re
+import threading
 import time
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
+import icalendar
 import pytest
 import requests
 
@@ -91,14 +96,14 @@ def count_event_titles(html, title):
     return len(re.findall(rf'"title":\s*"{re.escape(title)}"', html))
 
 
-def test_calendar_shows_french_week_view(serve_calendars, device_config, fake_browser_screenshot):
-    serve_calendars({FIRST_CALENDAR_URL: "french_week"})
-    """Checks that the chosen language reaches FullCalendar.
+def test_calendar_passes_the_french_locale_to_fullcalendar(serve_calendars, device_config, fake_browser_screenshot):
+    """Checks that the chosen language reaches the FullCalendar options, nothing more.
 
     Known limit: the FullCalendar bundle ships without locale files, so the fr locale is not loaded.
     Month and day names come from Intl and the Chromium ICU data; interface texts stay in English.
     To confirm visually in L6; if English shows up, add fr.global.min.js in L4b.
     """
+    serve_calendars({FIRST_CALENDAR_URL: "french_week"})
     settings = week_view_settings([FIRST_CALENDAR_URL])
 
     html = render_calendar_html(settings, device_config, fake_browser_screenshot)
@@ -107,20 +112,64 @@ def test_calendar_shows_french_week_view(serve_calendars, device_config, fake_br
     assert count_event_titles(html, "Dentiste") == 1
 
 
-def test_hostile_ics_summary_is_not_executed(serve_calendars, device_config, fake_browser_screenshot):
-    serve_calendars({FIRST_CALENDAR_URL: "hostile_summary"})
+HOSTILE_SUMMARIES = [
+    pytest.param("</script><img src=x onerror=alert(1)>", id="script-closing-tag"),
+    pytest.param("<!--", id="html-comment-opening"),
+    pytest.param('say "hello"', id="double-quotes"),
+    pytest.param("l'été d'Éric", id="apostrophes"),
+    pytest.param("back\\slash", id="backslashes"),
+    pytest.param("first line\nsecond line", id="line-break"),
+    pytest.param("&lt;b&gt; &amp; &#x27;", id="html-entities"),
+    pytest.param("{{ 7*7 }}", id="template-expression"),
+    pytest.param('{"valid": [1, 2]}', id="valid-json"),
+]
+CHARACTERS_THAT_BREAK_OUT_OF_A_SCRIPT_BLOCK = "<>&'"
+
+
+def build_calendar_with_summary(summary):
+    today_at_ten = datetime.now(ZoneInfo(DEVICE_TIMEZONE)).replace(hour=10, minute=0, second=0, microsecond=0)
+    event = icalendar.Event()
+    event.add("uid", "hostile@example.invalid")
+    event.add("dtstamp", datetime(2026, 1, 1, tzinfo=ZoneInfo("UTC")))
+    event.add("dtstart", today_at_ten)
+    event.add("dtend", today_at_ten + timedelta(hours=1))
+    event.add("summary", summary)
+    calendar = icalendar.Calendar()
+    calendar.add("version", "2.0")
+    calendar.add("prodid", "-//example.invalid//calendar-fixture//FR")
+    calendar.add_component(event)
+    return calendar.to_ical().decode()
+
+
+def extract_events_literal(html):
+    return re.search(r"const events = (.*);$", html, re.MULTILINE).group(1)
+
+
+@pytest.mark.parametrize("hostile_summary", HOSTILE_SUMMARIES)
+def test_hostile_ics_summary_is_not_executed(
+    hostile_summary, monkeypatch, device_config, fake_browser_screenshot
+):
+    monkeypatch.setattr(
+        requests, "get", lambda url, *args, **kwargs: FakeCalendarResponse(build_calendar_with_summary(hostile_summary))
+    )
     settings = week_view_settings([FIRST_CALENDAR_URL])
 
     html = render_calendar_html(settings, device_config, fake_browser_screenshot)
 
-    assert "</script><img" not in html
-    assert "\\u003c/script\\u003e\\u003cimg" in html
+    events_literal = extract_events_literal(html)
+    shown_titles = [event["title"] for event in json.loads(events_literal)]
+    assert shown_titles == [hostile_summary]
+    assert not any(character in events_literal for character in CHARACTERS_THAT_BREAK_OUT_OF_A_SCRIPT_BLOCK)
 
 
+EVENTS_THAT_CANNOT_BE_PLACED = ["event_without_dtstart", "event_with_dtend_only", "rrule_without_dtstart"]
+
+
+@pytest.mark.parametrize("fixture_name", EVENTS_THAT_CANNOT_BE_PLACED)
 def test_event_without_dtstart_does_not_empty_the_calendar(
-    serve_calendars, device_config, fake_browser_screenshot, caplog
+    fixture_name, serve_calendars, device_config, fake_browser_screenshot, caplog
 ):
-    serve_calendars({FIRST_CALENDAR_URL: "event_without_dtstart"})
+    serve_calendars({FIRST_CALENDAR_URL: fixture_name})
     settings = week_view_settings([FIRST_CALENDAR_URL])
 
     with caplog.at_level(logging.WARNING):
@@ -252,3 +301,100 @@ def test_recurring_event_appears_on_each_day_of_the_week(serve_calendars, device
     html = render_calendar_html(settings, device_config, fake_browser_screenshot)
 
     assert count_event_titles(html, "Standup") == 3
+
+
+SECRET_PATH_TOKEN = "secret-token-123"
+SERVED_FEED_PATH = f"/{SECRET_PATH_TOKEN}/feed"
+ABSENT_FEED_PATH = f"/{SECRET_PATH_TOKEN}/absent"
+LOGGING_CONF = Path(__file__).parent.parent / "src" / "config" / "logging.conf"
+
+
+@pytest.fixture
+def local_calendar_url(outbound_network_guard):
+    """Serves the french_week fixture on a real 127.0.0.1 socket and returns a function building urls on it."""
+
+    class FeedHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            is_served_feed = self.path == SERVED_FEED_PATH
+            body = read_calendar_fixture("french_week").encode() if is_served_feed else b"not found"
+            self.send_response(200 if is_served_feed else 404)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args):
+            return None
+
+    outbound_network_guard.allow("127.0.0.1")
+    server = HTTPServer(("127.0.0.1", 0), FeedHandler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    yield lambda path: f"http://127.0.0.1:{server.server_port}{path}"
+    server.shutdown()
+    server.server_close()
+
+
+def read_calendar_over_local_server(url, device_config, fake_browser_screenshot):
+    settings = week_view_settings([url])
+    return render_calendar_html(settings, device_config, fake_browser_screenshot)
+
+
+@pytest.mark.parametrize("path", [SERVED_FEED_PATH, ABSENT_FEED_PATH], ids=["served", "not-found"])
+def test_calendar_plugin_logs_never_contain_the_url_over_a_real_connection_at_debug(
+    path, local_calendar_url, device_config, fake_browser_screenshot, caplog
+):
+    """Checks every record the plugin emits at DEBUG, over a real socket, for a path carrying a secret token.
+
+    Known limit: urllib3 logs the request line, path included, at DEBUG. Those records are not the plugin's,
+    so they are left out here; production is protected by the INFO level of the root logger, checked below.
+    """
+    url = local_calendar_url(path)
+
+    with caplog.at_level(logging.DEBUG):
+        try:
+            read_calendar_over_local_server(url, device_config, fake_browser_screenshot)
+        except RuntimeError as failure:
+            assert SECRET_PATH_TOKEN not in str(failure)
+
+    plugin_records = [record for record in caplog.records if not record.name.startswith("urllib3")]
+    assert plugin_records
+    assert not any(SECRET_PATH_TOKEN in record.getMessage() for record in plugin_records)
+
+
+def test_production_logging_stays_at_info_so_urllib3_never_logs_the_path(
+    local_calendar_url, device_config, fake_browser_screenshot, caplog
+):
+    logging_conf = configparser.ConfigParser()
+    logging_conf.read(LOGGING_CONF)
+    assert logging_conf["logger_root"]["level"] == "INFO"
+    assert logging_conf["handler_consoleHandler"]["level"] == "INFO"
+    url = local_calendar_url(SERVED_FEED_PATH)
+
+    with caplog.at_level(logging.INFO):
+        read_calendar_over_local_server(url, device_config, fake_browser_screenshot)
+
+    assert SECRET_PATH_TOKEN not in caplog.text
+
+
+DEFAULT_COLOR = "#007BFF"
+COLOR_SETTINGS_WITHOUT_A_COLOR_FOR_EACH_CALENDAR = [
+    pytest.param(None, id="colors-absent"),
+    pytest.param([], id="colors-empty"),
+    pytest.param(["#336699"], id="colors-shorter-than-urls"),
+    pytest.param(["not-a-color", "#996633"], id="color-invalid"),
+]
+
+
+@pytest.mark.parametrize("colors", COLOR_SETTINGS_WITHOUT_A_COLOR_FOR_EACH_CALENDAR)
+def test_calendar_without_a_usable_color_is_shown_with_the_default_color(
+    colors, serve_calendars, device_config, fake_browser_screenshot, caplog
+):
+    serve_calendars({FIRST_CALENDAR_URL: "french_week", SECOND_CALENDAR_URL: "second"})
+    settings = week_view_settings([FIRST_CALENDAR_URL, SECOND_CALENDAR_URL], **{"calendarColors[]": colors})
+
+    with caplog.at_level(logging.WARNING):
+        html = render_calendar_html(settings, device_config, fake_browser_screenshot)
+
+    assert count_event_titles(html, "Dentiste") == 1
+    assert count_event_titles(html, "Yoga") == 1
+    assert f'"{DEFAULT_COLOR}"' in html
+    assert "using the default color" in caplog.text
