@@ -139,7 +139,7 @@ class Calendar(BasePlugin):
         end_of_range = self.as_naive_local_datetime(end_range, tz)
         events_from_range_start = recurring_ical_events.of(cal).after(start_range)
         events_until_range_end = takewhile(
-            lambda event: self.as_naive_local_datetime(event.decoded("dtstart"), tz) <= end_of_range,
+            lambda event: self.as_naive_local_datetime(event.decoded("dtstart"), tz) < end_of_range,
             events_from_range_start,
         )
         events_and_one_more = list(islice(events_until_range_end, MAX_EVENTS_PER_CALENDAR + 1))
@@ -247,7 +247,7 @@ class Calendar(BasePlugin):
         Returns '#000000' (black) or '#ffffff' (white) depending on the contrast
         against the given color.
         """
-        r, g, b = ImageColor.getrgb(color)
+        r, g, b = ImageColor.getrgb(color)[:3]
         # YIQ formula to estimate brightness
         yiq = (r * 299 + g * 587 + b * 114) / 1000
 
