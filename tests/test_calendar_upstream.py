@@ -390,6 +390,7 @@ def test_recurring_event_appears_on_each_day_of_the_week(serve_calendars, device
 
 SERVED_FEED_PATH = f"/{SECRET_PATH_TOKEN}/feed"
 ABSENT_FEED_PATH = f"/{SECRET_PATH_TOKEN}/absent"
+TRANSPORT_DEBUG_LOGGER_EXCLUDED = "urllib3"
 LOGGING_CONF = Path(__file__).parent.parent / "src" / "config" / "logging.conf"
 
 
@@ -423,8 +424,8 @@ def test_calendar_plugin_logs_never_contain_the_url_over_a_real_connection_at_de
 ):
     """Checks every record the plugin emits at DEBUG, over a real socket, for a path carrying a secret token.
 
-    Known limit: urllib3 logs the request line, path included, at DEBUG. Those records are not the plugin's,
-    so they are left out here; production is protected by the INFO level of the root logger, checked below.
+    Known limit: DEBUG exposes the URL path through urllib3; production runs at INFO, checked below.
+    The urllib3 records are not the plugin's, so they are left out here.
     """
     settings = week_view_settings([local_calendar_url(path)])
 
@@ -434,7 +435,7 @@ def test_calendar_plugin_logs_never_contain_the_url_over_a_real_connection_at_de
         except RuntimeError as failure:
             assert SECRET_PATH_TOKEN not in str(failure)
 
-    plugin_records = [record for record in caplog.records if not record.name.startswith("urllib3")]
+    plugin_records = [record for record in caplog.records if not record.name.startswith(TRANSPORT_DEBUG_LOGGER_EXCLUDED)]
     assert plugin_records
     assert not any(SECRET_PATH_TOKEN in record.getMessage() for record in plugin_records)
 
