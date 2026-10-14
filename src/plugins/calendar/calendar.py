@@ -15,6 +15,7 @@ import pytz
 logger = logging.getLogger(__name__)
 
 MAX_EVENTS_PER_CALENDAR = 2000
+TOO_DENSE_FREQUENCIES = {"SECONDLY", "MINUTELY"}
 
 class Calendar(BasePlugin):
     def generate_settings_template(self):
@@ -116,6 +117,7 @@ class Calendar(BasePlugin):
         failure_name = None
         try:
             self.drop_events_without_start(cal)
+            self.drop_events_recurring_too_densely(cal)
             return self.capped_events_in_range(cal, tz, start_range, end_range)
         except (ValueError, TypeError) as e:
             failure_name = type(e).__name__
@@ -163,6 +165,26 @@ class Calendar(BasePlugin):
         for event in events_without_start:
             logger.warning("skipping event without start")
             cal.subcomponents.remove(event)
+
+    def drop_events_recurring_too_densely(self, cal):
+        """Removes the events repeating every second or minute, which would flood the expansion."""
+        too_dense_events = [
+            component for component in cal.subcomponents
+            if component.name == "VEVENT" and self.has_too_dense_rrule(component)
+        ]
+        for event in too_dense_events:
+            logger.warning("skipping event recurring too densely")
+            cal.subcomponents.remove(event)
+
+    def has_too_dense_rrule(self, event):
+        rrules = event.get("rrule", [])
+        rrules = rrules if isinstance(rrules, list) else [rrules]
+        return any(self.is_too_dense_rrule(rrule) for rrule in rrules)
+
+    def is_too_dense_rrule(self, rrule):
+        repeats_every_second_or_minute = bool(set(rrule.get("FREQ", [])) & TOO_DENSE_FREQUENCIES)
+        fires_several_times_a_minute = len(rrule.get("BYSECOND", [])) > 1
+        return repeats_every_second_or_minute or fires_several_times_a_minute
 
     def get_view_range(self, view, current_dt, settings):
         start = datetime(current_dt.year, current_dt.month, current_dt.day)
