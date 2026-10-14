@@ -213,6 +213,20 @@ def test_calendar_url_never_appears_in_logs_on_network_failure(
     assert SECRET_PATH_TOKEN not in caplog.text
 
 
+@pytest.mark.parametrize("make_exception", NETWORK_FAILURES)
+def test_fetch_error_carries_no_chained_exception_that_could_hold_the_url(make_exception, failing_network):
+    failing_network(make_exception)
+
+    with pytest.raises(RuntimeError) as raised:
+        Calendar({"id": "calendar"}).fetch_calendar(SECRET_URL)
+
+    fetch_error = raised.value
+    assert fetch_error.__context__ is None
+    assert fetch_error.__cause__ is None
+    assert SECRET_PATH_TOKEN not in str(fetch_error)
+    assert SECRET_PATH_TOKEN not in "".join(traceback.format_exception(fetch_error))
+
+
 def test_calendar_url_never_appears_in_ui_response_on_network_failure(failing_network, make_app, caplog):
     failing_network(lambda url: requests.exceptions.ConnectionError(f"HTTPSConnectionPool: max retries for {url}"))
     app = make_app({"resolution": [800, 480], "orientation": "horizontal", "timezone": DEVICE_TIMEZONE})
@@ -268,6 +282,55 @@ def test_failing_calendar_does_not_empty_the_other_one(monkeypatch, device_confi
     html = render_calendar_html(settings, device_config, fake_browser_screenshot)
 
     assert count_event_titles(html, "Yoga") == 1
+
+
+def recurring_event_block(rrule, summary):
+    return "\n".join(
+        [
+            "BEGIN:VEVENT",
+            f"UID:{summary.lower()}@example.invalid",
+            "DTSTAMP:20260101T000000Z",
+            f"DTSTART:{todays_date_digits()}T000000Z",
+            f"DTEND:{todays_date_digits()}T000001Z",
+            f"RRULE:{rrule}",
+            f"SUMMARY:{summary}",
+            "END:VEVENT",
+        ]
+    )
+
+
+def calendar_text_with_events(*event_blocks):
+    header = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//example.invalid//calendar-fixture//FR"]
+    return "\n".join([*header, *event_blocks, "END:VCALENDAR"])
+
+
+@pytest.fixture
+def serve_calendar_texts(monkeypatch):
+    """Serves the given {url: ics text} over a patched requests.get."""
+
+    def serve(texts_by_url):
+        monkeypatch.setattr(requests, "get", lambda url, *args, **kwargs: FakeCalendarResponse(texts_by_url[url]))
+
+    return serve
+
+
+def test_calendar_with_unexpandable_rrule_does_not_empty_the_next_calendar(
+    serve_calendar_texts, device_config, fake_browser_screenshot, caplog
+):
+    serve_calendar_texts(
+        {
+            FIRST_CALENDAR_URL: calendar_text_with_events(recurring_event_block("FREQ=DAILY;BYHOUR=25", "Hors-limites")),
+            SECOND_CALENDAR_URL: read_calendar_fixture("second"),
+        }
+    )
+    settings = week_view_settings([FIRST_CALENDAR_URL, SECOND_CALENDAR_URL])
+
+    with caplog.at_level(logging.WARNING):
+        html = render_calendar_html(settings, device_config, fake_browser_screenshot)
+
+    assert count_event_titles(html, "Yoga") == 1
+    assert count_event_titles(html, "Hors-limites") == 0
+    assert "Skipping calendar" in caplog.text
 
 
 def test_unbounded_recurrence_is_capped_quickly_and_the_warning_hides_the_url(
