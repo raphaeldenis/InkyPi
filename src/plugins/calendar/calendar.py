@@ -82,14 +82,12 @@ class Calendar(BasePlugin):
         for calendar_index, calendar_url in enumerate(calendar_urls):
             color = self.color_or_default(colors, calendar_index)
             try:
-                cal = self.fetch_calendar(calendar_url)
-            except RuntimeError as fetch_error:
-                logger.warning(f"Skipping unreachable calendar: {fetch_error}")
-                last_fetch_error = fetch_error
+                events = self.load_calendar_events(calendar_url, tz, start_range, end_range)
+            except RuntimeError as load_error:
+                logger.warning(f"Skipping calendar: {load_error}")
+                last_fetch_error = load_error
                 continue
             loaded_calendar_count += 1
-            self.drop_events_without_start(cal)
-            events = self.capped_events_in_range(cal, tz, start_range, end_range)
             contrast_color = self.get_contrast_color(color)
 
             for event in events:
@@ -112,6 +110,17 @@ class Calendar(BasePlugin):
 
         return parsed_events
     
+    def load_calendar_events(self, calendar_url, tz, start_range, end_range):
+        """Returns the events of one calendar in the range, or raises a RuntimeError that never carries the url."""
+        cal = self.fetch_calendar(calendar_url)
+        failure_name = None
+        try:
+            self.drop_events_without_start(cal)
+            return self.capped_events_in_range(cal, tz, start_range, end_range)
+        except (ValueError, TypeError) as e:
+            failure_name = type(e).__name__
+        raise RuntimeError(f"Failed to read iCalendar events: {failure_name}")
+
     def color_or_default(self, colors, calendar_index):
         """Returns the calendar's own color, or the default one when it is missing or not a color."""
         has_color_at_index = bool(colors) and calendar_index < len(colors)
@@ -202,12 +211,14 @@ class Calendar(BasePlugin):
         # workaround for webcal urls
         if calendar_url.startswith("webcal://"):
             calendar_url = calendar_url.replace("webcal://", "https://")
+        failure_name = None
         try:
             response = requests.get(calendar_url, timeout=30)
             response.raise_for_status()
             return icalendar.Calendar.from_ical(response.text)
         except Exception as e:
-            raise RuntimeError(f"Failed to fetch iCalendar url: {type(e).__name__}") from None
+            failure_name = type(e).__name__
+        raise RuntimeError(f"Failed to fetch iCalendar url: {failure_name}")
 
     def get_contrast_color(self, color):
         """
