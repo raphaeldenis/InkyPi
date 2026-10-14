@@ -333,6 +333,20 @@ def test_calendar_with_unexpandable_rrule_does_not_empty_the_next_calendar(
     assert "Skipping calendar" in caplog.text
 
 
+def test_expansion_error_carries_no_chained_exception_that_could_hold_the_url(serve_calendar_texts):
+    unexpandable_event = recurring_event_block("FREQ=DAILY;BYHOUR=25", "Hors-limites")
+    serve_calendar_texts({SECRET_URL: calendar_text_with_events(unexpandable_event)})
+    paris = pytz.timezone(DEVICE_TIMEZONE)
+
+    with pytest.raises(RuntimeError) as raised:
+        Calendar({"id": "calendar"}).load_calendar_events(SECRET_URL, paris, datetime(2030, 1, 1), datetime(2030, 1, 8))
+
+    load_error = raised.value
+    assert load_error.__context__ is None
+    assert load_error.__cause__ is None
+    assert SECRET_PATH_TOKEN not in "".join(traceback.format_exception(load_error))
+
+
 DENSE_RRULES = [
     pytest.param("FREQ=SECONDLY", id="secondly"),
     pytest.param("FREQ=MINUTELY", id="minutely"),
