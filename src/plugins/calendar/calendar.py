@@ -1,7 +1,7 @@
 import os
 from utils.app_utils import resolve_path, get_font
 from plugins.base_plugin.base_plugin import BasePlugin
-from plugins.calendar.constants import LOCALE_MAP, FONT_SIZES
+from plugins.calendar.constants import DEFAULT_CALENDAR_COLOR, LOCALE_MAP, FONT_SIZES
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 import icalendar
 import recurring_ical_events
@@ -79,7 +79,8 @@ class Calendar(BasePlugin):
         last_fetch_error = None
         loaded_calendar_count = 0
 
-        for calendar_url, color in zip(calendar_urls, colors):
+        for calendar_index, calendar_url in enumerate(calendar_urls):
+            color = self.color_or_default(colors, calendar_index)
             try:
                 cal = self.fetch_calendar(calendar_url)
             except RuntimeError as fetch_error:
@@ -111,6 +112,17 @@ class Calendar(BasePlugin):
 
         return parsed_events
     
+    def color_or_default(self, colors, calendar_index):
+        """Returns the calendar's own color, or the default one when it is missing or not a color."""
+        has_color_at_index = bool(colors) and calendar_index < len(colors)
+        color = colors[calendar_index] if has_color_at_index else None
+        try:
+            ImageColor.getrgb(color)
+            return color
+        except (ValueError, TypeError):
+            logger.warning(f"Calendar {calendar_index + 1} has no valid color, using the default color")
+            return DEFAULT_CALENDAR_COLOR
+
     def capped_events_in_range(self, cal, tz, start_range, end_range):
         """Returns at most MAX_EVENTS_PER_CALENDAR events of the range, without expanding the whole range."""
         end_of_range = self.as_naive_local_datetime(end_range, tz)

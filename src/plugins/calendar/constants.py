@@ -8,6 +8,8 @@ FONT_SIZES = {
     "x-large": 1.3
 }
 
+DEFAULT_CALENDAR_COLOR = "#007BFF"
+
 LOCALE_MAP = {
     "af": "Afrikaans",
     "ar-dz": "Arabic (Algeria)",

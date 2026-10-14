@@ -2,10 +2,16 @@ BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//example.invalid//calendar-fixture//FR
 BEGIN:VEVENT
-UID:hostile@example.invalid
+UID:rule-only@example.invalid
+DTSTAMP:20260101T000000Z
+RRULE:FREQ=DAILY;COUNT=3
+SUMMARY:Regle sans debut
+END:VEVENT
+BEGIN:VEVENT
+UID:dentiste@example.invalid
 DTSTAMP:20260101T000000Z
 DTSTART:@TODAY@T100000Z
 DTEND:@TODAY@T110000Z
-SUMMARY:</script><img src=x onerror=alert(1)>
+SUMMARY:Dentiste
 END:VEVENT
 END:VCALENDAR
