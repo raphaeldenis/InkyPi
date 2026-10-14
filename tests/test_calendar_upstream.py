@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 
 import icalendar
 import pytest
+import pytz
 import requests
 
 from config import Config
@@ -451,6 +452,57 @@ def test_production_logging_stays_at_info_so_urllib3_never_logs_the_path(
         render_calendar_html(settings, device_config, fake_browser_screenshot)
 
     assert SECRET_PATH_TOKEN not in caplog.text
+
+
+def plain_event_block(summary, start_utc):
+    return "\n".join(
+        [
+            "BEGIN:VEVENT",
+            f"UID:{summary.lower()}@example.invalid",
+            "DTSTAMP:20260101T000000Z",
+            f"DTSTART:{start_utc}",
+            f"SUMMARY:{summary}",
+            "END:VEVENT",
+        ]
+    )
+
+
+def test_range_end_is_exclusive(serve_calendar_texts):
+    paris = pytz.timezone(DEVICE_TIMEZONE)
+    range_start = datetime(2030, 1, 1)
+    range_end = datetime(2030, 1, 1, 11, 0)
+    starts_exactly_at_range_end = plain_event_block("Pile", "20300101T100000Z")
+    starts_just_before_range_end = plain_event_block("Juste-avant", "20300101T095900Z")
+    serve_calendar_texts(
+        {FIRST_CALENDAR_URL: calendar_text_with_events(starts_exactly_at_range_end, starts_just_before_range_end)}
+    )
+
+    events = Calendar({"id": "calendar"}).fetch_ics_events(
+        [FIRST_CALENDAR_URL], ["#336699"], paris, range_start, range_end
+    )
+
+    assert [event["title"] for event in events] == ["Juste-avant"]
+
+
+COLORS_WITH_AN_ALPHA_CHANNEL = [
+    pytest.param("#1234", id="short-rgba"),
+    pytest.param("#11223344", id="long-rgba"),
+]
+
+
+@pytest.mark.parametrize("color", COLORS_WITH_AN_ALPHA_CHANNEL)
+def test_calendar_color_with_an_alpha_channel_is_rendered_as_is(
+    color, serve_calendars, device_config, fake_browser_screenshot, caplog
+):
+    serve_calendars({FIRST_CALENDAR_URL: "french_week"})
+    settings = week_view_settings([FIRST_CALENDAR_URL], **{"calendarColors[]": [color]})
+
+    with caplog.at_level(logging.WARNING):
+        html = render_calendar_html(settings, device_config, fake_browser_screenshot)
+
+    assert count_event_titles(html, "Dentiste") == 1
+    assert f'"{color}"' in html
+    assert "using the default color" not in caplog.text
 
 
 DEFAULT_COLOR = "#007BFF"
