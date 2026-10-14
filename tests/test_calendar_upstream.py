@@ -16,7 +16,6 @@ import pytest
 import requests
 
 from config import Config
-from plugins.calendar import calendar as calendar_module
 from plugins.calendar.calendar import Calendar
 from plugins.plugin_registry import load_plugins
 
@@ -333,12 +332,39 @@ def test_calendar_with_unexpandable_rrule_does_not_empty_the_next_calendar(
     assert "Skipping calendar" in caplog.text
 
 
-def test_unbounded_recurrence_is_capped_quickly_and_the_warning_hides_the_url(
+DENSE_RRULES = [
+    pytest.param("FREQ=SECONDLY", id="secondly"),
+    pytest.param("FREQ=MINUTELY", id="minutely"),
+    pytest.param("FREQ=DAILY;BYSECOND=0,30", id="several-seconds"),
+]
+
+
+@pytest.mark.parametrize("dense_rrule", DENSE_RRULES)
+def test_event_recurring_by_the_second_or_minute_is_dropped_and_the_others_are_kept(
+    dense_rrule, serve_calendar_texts, device_config, fake_browser_screenshot, caplog
+):
+    second_calendar_event = read_calendar_fixture("second").split("BEGIN:VEVENT", 1)[1].split("END:VEVENT", 1)[0]
+    yoga_event_block = f"BEGIN:VEVENT{second_calendar_event}END:VEVENT"
+    serve_calendar_texts(
+        {SECRET_URL: calendar_text_with_events(recurring_event_block(dense_rrule, "Rafale"), yoga_event_block)}
+    )
+    settings = week_view_settings([SECRET_URL])
+
+    with caplog.at_level(logging.WARNING):
+        html = render_calendar_html(settings, device_config, fake_browser_screenshot)
+
+    assert count_event_titles(html, "Rafale") == 0
+    assert count_event_titles(html, "Yoga") == 1
+    assert "skipping event recurring too densely" in caplog.text
+    assert SECRET_PATH_TOKEN not in caplog.text
+
+
+def test_dense_unbounded_recurrence_is_capped_quickly_and_the_warning_hides_the_url(
     serve_calendars, device_config, fake_browser_screenshot, caplog
 ):
-    event_cap = calendar_module.MAX_EVENTS_PER_CALENDAR
+    event_cap = 2000
     time_budget_in_seconds = 5
-    serve_calendars({SECRET_URL: "unbounded_secondly"})
+    serve_calendars({SECRET_URL: "unbounded_dense"})
     settings = week_view_settings([SECRET_URL])
 
     started_at = time.perf_counter()
