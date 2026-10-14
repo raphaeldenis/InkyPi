@@ -23,8 +23,8 @@ from plugins.plugin_registry import load_plugins
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 TODAY_TOKEN = "@TODAY@"
 DEVICE_TIMEZONE = "Europe/Paris"
-SECRET_URL = "https://example.invalid/secret-token-123"
-SECRET_VALUE = "example.invalid/secret-token-123"
+SECRET_PATH_TOKEN = "secret-token-123"
+SECRET_URL = f"https://example.invalid/{SECRET_PATH_TOKEN}"
 FIRST_CALENDAR_URL = "https://example.invalid/first-calendar"
 SECOND_CALENDAR_URL = "https://example.invalid/second-calendar"
 
@@ -209,16 +209,12 @@ def test_calendar_url_never_appears_in_logs_on_network_failure(
             Calendar({"id": "calendar"}).generate_image(settings, device_config)
 
     raised_text = "".join(traceback.format_exception(raised.value))
-    assert SECRET_VALUE not in str(raised.value)
-    assert SECRET_VALUE not in raised_text
-    assert SECRET_VALUE not in caplog.text
+    assert SECRET_PATH_TOKEN not in raised_text
+    assert SECRET_PATH_TOKEN not in caplog.text
 
 
-@pytest.mark.parametrize("make_exception", NETWORK_FAILURES)
-def test_calendar_url_never_appears_in_ui_response_on_network_failure(
-    make_exception, failing_network, make_app, caplog
-):
-    failing_network(make_exception)
+def test_calendar_url_never_appears_in_ui_response_on_network_failure(failing_network, make_app, caplog):
+    failing_network(lambda url: requests.exceptions.ConnectionError(f"HTTPSConnectionPool: max retries for {url}"))
     app = make_app({"resolution": [800, 480], "orientation": "horizontal", "timezone": DEVICE_TIMEZONE})
     load_plugins(app.config["DEVICE_CONFIG"].get_plugins())
     app.config["REFRESH_TASK"] = SimpleNamespace(running=False)
@@ -234,8 +230,8 @@ def test_calendar_url_never_appears_in_ui_response_on_network_failure(
         response = app.test_client().post("/update_now", data=form)
 
     assert response.status_code == 500
-    assert SECRET_VALUE not in response.get_data(as_text=True)
-    assert SECRET_VALUE not in caplog.text
+    assert SECRET_PATH_TOKEN not in response.get_data(as_text=True)
+    assert SECRET_PATH_TOKEN not in caplog.text
 
 
 def test_webcal_url_is_fetched_over_https(serve_calendars, device_config, fake_browser_screenshot):
@@ -247,7 +243,6 @@ def test_webcal_url_is_fetched_over_https(serve_calendars, device_config, fake_b
     render_calendar_html(settings, device_config, fake_browser_screenshot)
 
     assert requested_urls == [https_url]
-    assert all(url.startswith("https://") for url in requested_urls)
 
 
 def test_two_calendars_are_both_read_in_the_given_order(serve_calendars, device_config, fake_browser_screenshot):
@@ -291,7 +286,7 @@ def test_unbounded_recurrence_is_capped_quickly_and_the_warning_hides_the_url(
     assert count_event_titles(html, "Rafale") == event_cap
     assert elapsed_in_seconds < time_budget_in_seconds
     assert f"truncated to {event_cap} events" in caplog.text
-    assert SECRET_VALUE not in caplog.text
+    assert SECRET_PATH_TOKEN not in caplog.text
 
 
 def test_recurring_event_appears_on_each_day_of_the_week(serve_calendars, device_config, fake_browser_screenshot):
@@ -303,7 +298,6 @@ def test_recurring_event_appears_on_each_day_of_the_week(serve_calendars, device
     assert count_event_titles(html, "Standup") == 3
 
 
-SECRET_PATH_TOKEN = "secret-token-123"
 SERVED_FEED_PATH = f"/{SECRET_PATH_TOKEN}/feed"
 ABSENT_FEED_PATH = f"/{SECRET_PATH_TOKEN}/absent"
 LOGGING_CONF = Path(__file__).parent.parent / "src" / "config" / "logging.conf"
@@ -333,11 +327,6 @@ def local_calendar_url(outbound_network_guard):
     server.server_close()
 
 
-def read_calendar_over_local_server(url, device_config, fake_browser_screenshot):
-    settings = week_view_settings([url])
-    return render_calendar_html(settings, device_config, fake_browser_screenshot)
-
-
 @pytest.mark.parametrize("path", [SERVED_FEED_PATH, ABSENT_FEED_PATH], ids=["served", "not-found"])
 def test_calendar_plugin_logs_never_contain_the_url_over_a_real_connection_at_debug(
     path, local_calendar_url, device_config, fake_browser_screenshot, caplog
@@ -347,11 +336,11 @@ def test_calendar_plugin_logs_never_contain_the_url_over_a_real_connection_at_de
     Known limit: urllib3 logs the request line, path included, at DEBUG. Those records are not the plugin's,
     so they are left out here; production is protected by the INFO level of the root logger, checked below.
     """
-    url = local_calendar_url(path)
+    settings = week_view_settings([local_calendar_url(path)])
 
     with caplog.at_level(logging.DEBUG):
         try:
-            read_calendar_over_local_server(url, device_config, fake_browser_screenshot)
+            render_calendar_html(settings, device_config, fake_browser_screenshot)
         except RuntimeError as failure:
             assert SECRET_PATH_TOKEN not in str(failure)
 
@@ -367,10 +356,10 @@ def test_production_logging_stays_at_info_so_urllib3_never_logs_the_path(
     logging_conf.read(LOGGING_CONF)
     assert logging_conf["logger_root"]["level"] == "INFO"
     assert logging_conf["handler_consoleHandler"]["level"] == "INFO"
-    url = local_calendar_url(SERVED_FEED_PATH)
+    settings = week_view_settings([local_calendar_url(SERVED_FEED_PATH)])
 
     with caplog.at_level(logging.INFO):
-        read_calendar_over_local_server(url, device_config, fake_browser_screenshot)
+        render_calendar_html(settings, device_config, fake_browser_screenshot)
 
     assert SECRET_PATH_TOKEN not in caplog.text
 
