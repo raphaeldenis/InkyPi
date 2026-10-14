@@ -1,5 +1,6 @@
 import logging
 import re
+import time
 import traceback
 from datetime import datetime
 from pathlib import Path
@@ -10,6 +11,7 @@ import pytest
 import requests
 
 from config import Config
+from plugins.calendar import calendar as calendar_module
 from plugins.calendar.calendar import Calendar
 from plugins.plugin_registry import load_plugins
 
@@ -222,6 +224,25 @@ def test_failing_calendar_does_not_empty_the_other_one(monkeypatch, device_confi
     html = render_calendar_html(settings, device_config, fake_browser_screenshot)
 
     assert count_event_titles(html, "Yoga") == 1
+
+
+def test_unbounded_recurrence_is_capped_quickly_and_the_warning_hides_the_url(
+    serve_calendars, device_config, fake_browser_screenshot, caplog
+):
+    event_cap = calendar_module.MAX_EVENTS_PER_CALENDAR
+    time_budget_in_seconds = 5
+    serve_calendars({SECRET_URL: "unbounded_secondly"})
+    settings = week_view_settings([SECRET_URL])
+
+    started_at = time.perf_counter()
+    with caplog.at_level(logging.WARNING):
+        html = render_calendar_html(settings, device_config, fake_browser_screenshot)
+    elapsed_in_seconds = time.perf_counter() - started_at
+
+    assert count_event_titles(html, "Rafale") == event_cap
+    assert elapsed_in_seconds < time_budget_in_seconds
+    assert f"truncated to {event_cap} events" in caplog.text
+    assert SECRET_VALUE not in caplog.text
 
 
 def test_recurring_event_appears_on_each_day_of_the_week(serve_calendars, device_config, fake_browser_screenshot):
