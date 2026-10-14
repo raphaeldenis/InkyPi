@@ -9,9 +9,12 @@ from io import BytesIO
 import logging
 import requests
 from datetime import datetime, timedelta
+from itertools import islice, takewhile
 import pytz
 
 logger = logging.getLogger(__name__)
+
+MAX_EVENTS_PER_CALENDAR = 2000
 
 class Calendar(BasePlugin):
     def generate_settings_template(self):
@@ -85,7 +88,7 @@ class Calendar(BasePlugin):
                 continue
             loaded_calendar_count += 1
             self.drop_events_without_start(cal)
-            events = recurring_ical_events.of(cal).between(start_range, end_range)
+            events = self.capped_events_in_range(cal, tz, start_range, end_range)
             contrast_color = self.get_contrast_color(color)
 
             for event in events:
@@ -108,6 +111,28 @@ class Calendar(BasePlugin):
 
         return parsed_events
     
+    def capped_events_in_range(self, cal, tz, start_range, end_range):
+        """Returns at most MAX_EVENTS_PER_CALENDAR events of the range, without expanding the whole range."""
+        end_of_range = self.as_naive_local_datetime(end_range, tz)
+        events_from_range_start = recurring_ical_events.of(cal).after(start_range)
+        events_until_range_end = takewhile(
+            lambda event: self.as_naive_local_datetime(event.decoded("dtstart"), tz) <= end_of_range,
+            events_from_range_start,
+        )
+        events_and_one_more = list(islice(events_until_range_end, MAX_EVENTS_PER_CALENDAR + 1))
+
+        is_over_the_cap = len(events_and_one_more) > MAX_EVENTS_PER_CALENDAR
+        if is_over_the_cap:
+            logger.warning(f"Calendar events truncated to {MAX_EVENTS_PER_CALENDAR} events")
+        return events_and_one_more[:MAX_EVENTS_PER_CALENDAR]
+
+    def as_naive_local_datetime(self, moment, tz):
+        """Returns a date or datetime as a naive datetime on the device clock, comparable with any other."""
+        if not isinstance(moment, datetime):
+            return datetime(moment.year, moment.month, moment.day)
+        is_naive = moment.tzinfo is None
+        return moment if is_naive else moment.astimezone(tz).replace(tzinfo=None)
+
     def drop_events_without_start(self, cal):
         """Removes the events that have no DTSTART, which the recurrence expansion cannot handle."""
         events_without_start = [
