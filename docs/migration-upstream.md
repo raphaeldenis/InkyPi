@@ -6,7 +6,7 @@ Repères utilisés ci-dessous :
 
 - `<racine>` : la racine du dépôt déployé sur le Pi.
 - `<horodatage>` : l'horodatage de la coupure, par exemple `20261014-0900`.
-- `<sauvegarde>` : `/var/backups/inkypi/<horodatage>-pre-INK-024`, hors de l'arbre `rsync`.
+- `<sauvegarde>` : `/var/backups/inkypi/<horodatage>-pre-INK-024` (AAAAMMJJ-HHMM, directement sous `/var/backups/inkypi`), hors de l'arbre `rsync`. L'horodatage est celui du POSTE (`date +%Y%m%d-%H%M` sur le poste) ; vérifier avant la coupure que le Pi n'est pas en avance sur le poste (`timedatectl`, INK-025), sinon `deploy.sh` refuse un dossier daté du futur.
 - `<checkout upstream>` : le checkout du dépôt upstream sur le poste, celui qui contient les `plugin-info.json`.
 - `<migré>` : le fichier `device.json` migré, produit sur le poste.
 
@@ -51,15 +51,17 @@ La fenêtre de coupure va de l'étape 2 à la fin de l'étape 5 : `install/updat
 4. **Sauvegardes, hors de l'arbre `rsync`, AVANT toute migration.** Cette sauvegarde est le seul instantané de l'ancienne configuration : l'archive que `deploy.sh` prend plus tard est faite après la copie du nouveau `device.json` et ne la contient pas (voir « Rollback »). Ne jamais poser la sauvegarde sous `<racine>/src/` : le `rsync --delete` du déploiement l'effacerait.
    1. Créer le dossier avec des droits stricts : `umask 077`, puis `mkdir -p <sauvegarde>` et `chmod 700 <sauvegarde>`.
    2. Archiver les répertoires : `tar -cf <sauvegarde>/inkypi-dirs.tar -C / usr/local/inkypi`, puis `sha256sum <sauvegarde>/inkypi-dirs.tar > <sauvegarde>/inkypi-dirs.tar.sha256`. Ne jamais calculer `sha256sum` sur un répertoire.
-   3. Copier les fichiers : `<racine>/src/config/device.json`, `<racine>/.env`, `/etc/systemd/system/inkypi.service` et `/usr/local/bin/inkypi` vers `<sauvegarde>`, puis écrire à côté la somme `sha256sum` de chaque fichier copié.
-   4. Écrire la somme des **emplacements d'origine** (le service est arrêté, ils ne bougent plus) : `sha256sum <racine>/src/config/device.json <racine>/.env /etc/systemd/system/inkypi.service /usr/local/bin/inkypi > <sauvegarde>/destinations.sha256`. Le rollback s'en sert pour contrôler les destinations.
+   3. Copier les fichiers : `<racine>/src/config/device.json`, `<racine>/.env`, `/etc/systemd/system/inkypi.service` et `/usr/local/bin/inkypi` vers `<sauvegarde>`, puis écrire à côté la somme `sha256sum` de chaque fichier copié. Chaque fichier `.sha256` contient UNE ligne avec le chemin ABSOLU du fichier, donc `sha256sum <sauvegarde>/x > <sauvegarde>/x.sha256` sans se placer dans le dossier (un chemin relatif fait refuser le rollback complet, exit 3, au pire moment). Le sha précédent est lu par `deploy.sh` dans `.deployed-sha` et inscrit dans le nom de l'archive `pre-<sha>` ; le rollback le remet depuis ce nom.
+   4. Écrire la somme des **emplacements d'origine** (le service est arrêté, ils ne bougent plus) : `sha256sum <racine>/src/config/device.json <racine>/.env /etc/systemd/system/inkypi.service /usr/local/bin/inkypi > <sauvegarde>/destinations.sha256`. Le rollback s'en sert pour contrôler les destinations (les quatre, étape 7 du Rollback). Avant la première migration, `deploy.sh` ne contrôle que `.env`, le service et la CLI : la somme de `device.json` est périmée par construction, car l'étape 5.5 le remplace par la version migrée ; il doit seulement être présent sur le Pi, régulier et non vide.
    5. Relire toutes les sommes avec `sha256sum -c` avant de continuer.
+
+   Si `deploy.sh` signale le dossier périmé après l'étape 5.5, ne jamais recopier `device.json` : conserver sa copie et sa somme d'origine, et ne refaire que `.env`, le service et la CLI (copies, sommes, ligne de `destinations.sha256`).
 5. **Migration sur le poste.** Le script n'est pas déployé sur le Pi (le `rsync` ne transporte que `src` et `install`) ; la migration se fait sur le poste de Raphaël.
    1. Rapatrier sur le poste la sauvegarde de `device.json` (copie, jamais l'original du Pi).
    2. Lancer : `python3 scripts/migrate_device_config.py --in <copie rapatriée> --out <migré> --display-type <valeur confirmée par INK-025> --plugins-dir <checkout upstream>/src/plugins`. Le dossier passé à `--plugins-dir` est celui d'**upstream**, qui contient les `plugin-info.json`, jamais celui de l'ancien Pi.
    3. Vérifier le rapport : il ne doit lister que des instances calendrier (`icalendar`, `icloud_calendar`). Un autre `plugin_id` absent de l'inventaire fait refuser la migration : comprendre pourquoi avant d'ajouter `--remove-plugin-id <id>`. Le compte `kept N / removed M` doit correspondre à ce que Raphaël attend.
    4. Vérifier que `<migré>` est du JSON valide : `python3 -m json.tool <migré> > /dev/null` (seul le code de sortie 0 compte, le contenu n'est pas affiché).
-   5. Pendant la coupure, recopier `<migré>` sur le Pi vers `<racine>/src/config/device.json`.
+   5. Pendant la coupure, recopier `<migré>` sur le Pi vers `<racine>/src/config/device.json`. Cette recopie précède `deploy.sh --first-upstream-migration` (étape 6), qui refuse un `device.json` absent ou vide. Le playbook `migrate-pi-to-upstream` enchaîne les cellules de cette procédure.
 6. **Code, puis `install/update.sh`.** Lancer `deploy.sh` en mode « première migration » d'INK-027 (`rsync` du code, sans redémarrage), puis `install/update.sh` d'upstream (service, CLI, dépendances apt et pip). `update.sh` exécute `systemctl restart` : le service redémarre ici, c'est la fin de la fenêtre de coupure. Ne pas lancer `install.sh` : il exécute `rm -rf /usr/local/inkypi` et détruit le venv. Si `update.sh` ne suffit pas sur un Pi encore au format du fork, `install.sh` n'est acceptable qu'avec l'étape 4 vérifiée, en sachant que le venv est recréé.
 7. **Calendrier.** L'interface web exige le service démarré (étape 6 terminée). Dans l'interface web (réseau local uniquement), Raphaël crée une instance du plugin `calendar`, colle le lien de partage (jamais affiché ni recopié ailleurs) dans `calendarURLs[]` et règle `language` sur `fr`. Ensuite, il retire `CALENDAR_URL` du `.env` : la page « API Keys » d'upstream lit et réécrit ce fichier. Contrôle : `grep -c '^CALENDAR_URL=' <racine>/.env` affiche `0`.
 8. **Contrôles.**
@@ -87,7 +89,7 @@ Ordre imposé : **`device.json` est restauré en dernier**, après toutes les ex
    4. Seulement alors, supprimer la copie de côté : `sudo rm -rf /usr/local/inkypi.set-aside`. En cas d'échec de l'extraction ou du test, supprimer l'arbre partiel et remettre la copie de côté à sa place.
 4. Restaurer le service et la CLI depuis `<sauvegarde>` : `/etc/systemd/system/inkypi.service` et `/usr/local/bin/inkypi`.
 5. Restaurer `src` et `install` depuis l'archive `pre-<sha>` de `deploy.sh`. L'extraction n'efface rien : les fichiers que la nouvelle version a ajoutés sous `src` et `install` restent (liste plus bas).
-6. **En dernier**, restaurer `device.json` depuis `<sauvegarde>` vers `<racine>/src/config/device.json`, puis l'ancien `.env` vers `<racine>/.env` (l'étape 7 l'a modifié) avant tout redémarrage.
+6. Restaurer l'ancien `.env` vers `<racine>/.env` (l'étape 7 l'a modifié), puis **en dernier** `device.json` depuis `<sauvegarde>` vers `<racine>/src/config/device.json`, avant tout redémarrage.
 7. Contrôler les **destinations**, pas seulement les copies sauvegardées : `sha256sum -c <sauvegarde>/destinations.sha256`. Une somme qui diffère signifie que la restauration n'a pas eu lieu : ne pas redémarrer.
 8. `sudo systemctl daemon-reload`, puis `sudo systemctl start inkypi`, et refaire les contrôles de l'étape 8 adaptés à l'ancienne version.
 
