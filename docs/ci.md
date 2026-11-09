@@ -7,11 +7,13 @@ The workflow `.github/workflows/ci.yml` runs on `push` and `pull_request` to `ma
 - Syntax errors and undefined names, via `ruff` rules E9, F63, F7 and F82.
 - The `pytest` tests in `tests/`.
 
-The tests use no network, no `.env` and no real `device.json` (see `tests/conftest.py`), but the suite has no global network block.
+The tests use no external network, no `.env` and no real `device.json` (see `tests/conftest.py`), but the suite has no global network block.
 
 ## What the CI does not cover
 
 Inky/Waveshare display output, Chromium rendering, systemd and the install scripts, ARM/Pi behavior (the job runs on `ubuntu-latest`, x86-64), and third-party APIs.
+
+A broken import in a module that no test imports also passes. Plugins are the case: `plugin_registry.load_plugins` wraps each import in a `try/except`, and ruff does not check that imports resolve. The same goes for a dependency missing from the requirements files that only such a plugin uses.
 
 ## Reproduce locally
 
@@ -35,6 +37,5 @@ pytest -q
 | `src/blueprints/plugin.py` | `plugin_instance_name` |
 | `src/utils/app_utils.py` | `subprocess` |
 
-The F821 exclusion covers these two files entirely, so a new undefined name in them goes undetected while these names stay undefined. The code is unchanged here, and the exclusions stay while these names stay undefined.
-
+The F821 exclusion covers these two files entirely, so a new undefined name in them goes undetected while these names stay undefined.
 Deleting `.github/workflows/ci.yml` removes the CI.
