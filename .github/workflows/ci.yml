@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: install/requirements-dev.txt
+      - name: Install dependencies
+        run: pip install -r install/requirements-dev.txt ruff==0.8.6
+      - name: Compile sources
+        run: python -m compileall -q src scripts
+      - name: Lint undefined names and syntax errors
+        run: >-
+          ruff check --select E9,F63,F7,F82
+          --config 'lint.per-file-ignores = {"src/blueprints/plugin.py" = ["F821"], "src/utils/app_utils.py" = ["F821"]}'
+          .
+      - name: Run tests
+        run: pytest -q
